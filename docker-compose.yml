@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  scambaiter-crm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scambaiter-crm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=file:/app/prisma/scambaiter.db
+      - JWT_SECRET=${JWT_SECRET:-super-secret-dokploy-scambaiter-key-2026}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - APP_URL=${APP_URL:-https://your-domain.com}
+    volumes:
+      # Persistent volume for Dokploy Cloudflare S3 backup
+      - scambaiter_db_data:/app/prisma
+    labels:
+      # Traefik configuration for Dokploy
+      - "traefik.enable=true"
+      - "traefik.http.routers.scambaiter.rule=Host(`${DOMAIN:-scambaiter.yourdomain.com}`)"
+      - "traefik.http.routers.scambaiter.entrypoints=websecure"
+      - "traefik.http.routers.scambaiter.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scambaiter.loadbalancer.server.port=3000"
+      # Cloudflare real IP & secure headers
+      - "traefik.http.middlewares.cloudflare-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.scambaiter.middlewares=cloudflare-headers"
+
+volumes:
+  scambaiter_db_data:
+    name: scambaiter_db_data

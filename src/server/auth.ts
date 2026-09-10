@@ -1,0 +1,121 @@
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { prisma } from './db.ts';
+import type { Request, Response, NextFunction } from 'express';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'scambaiter-super-secret-key-2026';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl?: string | null;
+  role: string;
+}
+
+export function generateToken(user: AuthUser): string {
+  return jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+}
+
+export function verifyToken(token: string): AuthUser | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+export interface AuthenticatedRequest extends Request {
+  user?: AuthUser;
+}
+
+export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required. Please log in.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const payload = verifyToken(token);
+  if (!payload) {
+    return res.status(401).json({ error: 'Invalid or expired session. Please log in again.' });
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: payload.id },
+    select: { id: true, email: true, name: true, avatarUrl: true, role: true },
+  });
+
+  if (!dbUser) {
+    return res.status(401).json({ error: 'User not found in database.' });
+  }
+
+  // Check if this user matches the configured ADMIN_USER env
+  const adminEnvUser = process.env.ADMIN_USER?.toLowerCase().trim();
+  if (adminEnvUser && dbUser.email.toLowerCase().trim() === adminEnvUser && dbUser.role !== 'admin') {
+    dbUser.role = 'admin';
+  }
+
+  req.user = dbUser;
+  next();
+}
+
+export function isAdminUser(user: AuthUser | { email?: string; role?: string } | null | undefined): boolean {
+  if (!user) return false;
+  const adminEnvUser = process.env.ADMIN_USER?.toLowerCase().trim();
+  if (adminEnvUser && user.email?.toLowerCase().trim() === adminEnvUser) {
+    return true;
+  }
+  const role = (user.role || '').toLowerCase();
+  return (
+    role === 'admin' ||
+    role === 'admin_scambaiter' ||
+    role.includes('admin') ||
+    user.email === 'cookiescambait@gmail.com'
+  );
+}
+
+export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user || !isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+  }
+  next();
+}
+
+/**
+ * Parses a Google JWT credential (from Google Identity Services / GSI)
+ * or creates/updates a user from verified Google payload.
+ */
+export function parseJwtPayload(token: string): any {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      Buffer.from(base64, 'base64')
+        .toString('binary')
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 10);
+}
+
+export async function comparePassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
+}

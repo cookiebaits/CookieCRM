@@ -1,0 +1,74 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String?
+  name      String
+  avatarUrl String?
+  googleId  String?   @unique
+  role      String    @default("scambaiter")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  scammers  Scammer[]
+}
+
+model Scammer {
+  id              String         @id @default(cuid())
+  fullName        String
+  alias           String?
+  phoneNumber     String
+  status          String         @default("New Scammer") // "New Scammer", "Actively baiting", "Payment Pending", "Revealed / Reported"
+  carrier         String?        // Phone provider detected or entered
+  location        String?
+  scamType        String         @default("Tech Support") // Tech Support, Refund, Gift Card, Crypto, Bank Fraud, IRS/Govt, Romance
+  organization    String?        // Fake company e.g. "Geek Squad", "FTC", "PayPal Security"
+  flagged         Boolean        @default(false)
+  dangerLevel     String         @default("medium") // low, medium, high, critical
+  victimGivenInfo String?        // Notes/JSON on fake info given (fake SSN, fake bank, bait card)
+  remoteAccessId  String?        // AnyDesk, TeamViewer code
+  ipAddress       String?
+  notes           String?
+  totalTimeSpent  Int            @default(0) // total time in minutes
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  userId          String?
+  user            User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calls           CallLog[]
+  fraudAccounts   FraudAccount[]
+}
+
+model CallLog {
+  id                 String   @id @default(cuid())
+  scammerId          String
+  scammer            Scammer  @relation(fields: [scammerId], references: [id], onDelete: Cascade)
+  date               DateTime @default(now())
+  durationMinutes    Int      @default(0)
+  notes              String?
+  audioRecordingUrl  String?  // Base64 data URL or audio link
+  audioRecordingName String?
+  victimPersonaUsed  String?  // Scambaiter alias/persona used
+  infoGiven          String?  // Info fed to scammer during this call
+  outcome            String?  // e.g. "Kept on line 45m", "Obtained mule bank account", "Refund claim denied"
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model FraudAccount {
+  id             String   @id @default(cuid())
+  scammerId      String
+  scammer        Scammer  @relation(fields: [scammerId], references: [id], onDelete: Cascade)
+  accountType    String   // bank_account, crypto_wallet, zelle, wire, gift_card, paypal, cashapp
+  accountDetails String   // account/wallet number
+  institution    String?  // Bank name, crypto exchange, etc.
+  holderName     String?  // Mule name or scammer moniker
+  reportedToBank Boolean  @default(false)
+  createdAt      DateTime @default(now())
+}
