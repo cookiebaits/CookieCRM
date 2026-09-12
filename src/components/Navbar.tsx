@@ -41,7 +41,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isAdmin =
     user.role === 'admin' ||
     user.role === 'admin_scambaiter' ||
-    user.email === 'cookiescambait@gmail.com';
+    user.email.toLowerCase() === 'cookiescambait@gmail.com' ||
+    user.email.toLowerCase() === 'sbadmin@cookiebaits';
 
   return (
     <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur border-b border-slate-800/80 px-4 sm:px-6 py-3">
@@ -78,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Kanban className="w-3.5 h-3.5" />
-              <span>Pipeline</span>
+              <span>Active Baits</span>
             </button>
 
             <button

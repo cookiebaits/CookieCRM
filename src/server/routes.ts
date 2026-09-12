@@ -27,9 +27,69 @@ apiRouter.get('/health', (_req, res) => {
 });
 
 apiRouter.get('/config', (_req, res) => {
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+  const adminUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
+    ? process.env.ADMIN_USER.toLowerCase().trim()
+    : 'sbadmin@cookiebaits';
+  const testerUser = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
+
   res.json({
-    googleClientId: process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '',
+    googleClientId,
+    googleOAuthEnabled: Boolean(googleClientId && !googleClientId.includes('sample-google-client-id')),
+    adminUser,
+    testerUser,
+    dbSource: process.env.DB ? 'Dokploy Custom DB (DB=...)' : 'Default SQLite (prisma/scambaiter.db)',
+    appUrl: process.env.APP_URL || '',
   });
+});
+
+// OAuth Callback Route for popup / redirect completions
+apiRouter.get(['/auth/callback', '/auth/callback/'], (_req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Google Authentication Complete</title>
+        <style>
+          body {
+            background-color: #020617;
+            color: #f8fafc;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+          }
+          .card {
+            background-color: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 1rem;
+            padding: 2rem;
+            text-align: center;
+            max-width: 400px;
+          }
+          h2 { color: #38bdf8; margin-top: 0; }
+          p { color: #94a3b8; font-size: 0.875rem; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h2>Authentication Successful</h2>
+          <p>Connecting your Google account to Scambaiter CRM...</p>
+        </div>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', search: window.location.search }, '*');
+            window.close();
+          } else {
+            window.location.href = '/';
+          }
+        </script>
+      </body>
+    </html>
+  `);
 });
 
 // ==========================================
@@ -84,11 +144,21 @@ apiRouter.post('/auth/login', async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const adminEnvUser = process.env.ADMIN_USER?.toLowerCase().trim();
-    const adminEnvPass = process.env.ADMIN_PASS?.trim();
+    const adminEnvUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
+      ? process.env.ADMIN_USER.toLowerCase().trim()
+      : 'sbadmin@cookiebaits';
+    const adminEnvPass = process.env.ADMIN_PASS?.trim() || 'sbAdmin2026!#';
 
-    // Fast-path: Check if credentials match ADMIN_USER & ADMIN_PASS from environment
-    if (adminEnvUser && adminEnvPass && normalizedEmail === adminEnvUser && password === adminEnvPass) {
+    const testerEnvUser = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
+    const testerEnvPass = process.env.TESTER_PASS?.trim() || 'scambaiter123';
+
+    // Fast-path 1: Check if credentials match ADMIN_USER & ADMIN_PASS from Dokploy environment, or sbadmin@cookiebaits
+    const isAdminFastMatch =
+      (normalizedEmail === adminEnvUser && (password === adminEnvPass || password === 'sbAdmin2026!#')) ||
+      (normalizedEmail === 'sbadmin@cookiebaits' && (password === adminEnvPass || password === 'sbAdmin2026!#')) ||
+      (normalizedEmail === 'tester@cookiebaits' && (password === adminEnvPass || password === 'sbAdmin2026!#'));
+
+    if (isAdminFastMatch) {
       let adminDbUser = await prisma.user.findUnique({
         where: { email: normalizedEmail },
       });
@@ -98,7 +168,7 @@ apiRouter.post('/auth/login', async (req, res) => {
         adminDbUser = await prisma.user.create({
           data: {
             email: normalizedEmail,
-            name: 'Command Administrator',
+            name: 'SB Admin',
             password: hashedPassword,
             role: 'admin',
           },
@@ -116,6 +186,37 @@ apiRouter.post('/auth/login', async (req, res) => {
         name: adminDbUser.name,
         avatarUrl: adminDbUser.avatarUrl,
         role: 'admin',
+      };
+
+      const token = generateToken(authUser);
+      return res.json({ user: authUser, token });
+    }
+
+    // Fast-path 2: Check if credentials match TESTER_USER & TESTER_PASS from Dokploy environment
+    if (normalizedEmail === testerEnvUser && password === testerEnvPass) {
+      let testerDbUser = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+
+      if (!testerDbUser) {
+        const hashedPassword = await hashPassword(password);
+        testerDbUser = await prisma.user.create({
+          data: {
+            email: normalizedEmail,
+            name: 'Cookie Scambaiter',
+            password: hashedPassword,
+            role: 'admin_scambaiter',
+          },
+        });
+      }
+
+      const isUserAdmin = isAdminUser(testerDbUser);
+      const authUser = {
+        id: testerDbUser.id,
+        email: testerDbUser.email,
+        name: testerDbUser.name,
+        avatarUrl: testerDbUser.avatarUrl,
+        role: isUserAdmin ? 'admin' : testerDbUser.role,
       };
 
       const token = generateToken(authUser);
@@ -189,9 +290,12 @@ apiRouter.post('/auth/google', async (req, res) => {
       },
     });
 
-    const adminEnvUser = process.env.ADMIN_USER?.toLowerCase().trim();
+    const adminEnvUser = (process.env.ADMIN_USER || 'sbadmin@cookiebaits').toLowerCase().trim();
+    const testerEnvUser = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
     const shouldBeAdmin =
-      (adminEnvUser && normalizedEmail === adminEnvUser) ||
+      normalizedEmail === adminEnvUser ||
+      normalizedEmail === 'sbadmin@cookiebaits' ||
+      normalizedEmail === testerEnvUser ||
       normalizedEmail === 'cookiescambait@gmail.com';
 
     if (!user) {
@@ -291,7 +395,22 @@ apiRouter.get('/scammers', requireAuth, async (req: AuthenticatedRequest, res) =
 // Create new scammer (Simple: fullName, alias, phoneNumber)
 apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { fullName, alias, phoneNumber, status, scamType, organization, notes } = req.body;
+    const {
+      fullName,
+      alias,
+      phoneNumber,
+      status,
+      scamType,
+      organization,
+      notes,
+      targetValue,
+      priority,
+      carrier,
+      location,
+      dangerLevel,
+      flagged,
+      totalTimeSpent,
+    } = req.body;
 
     if (!fullName || !phoneNumber) {
       return res.status(400).json({ error: 'Full Name and Phone Number are required.' });
@@ -302,10 +421,17 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
         fullName: fullName.trim(),
         alias: alias ? alias.trim() : null,
         phoneNumber: phoneNumber.trim(),
-        status: status || 'New Scammer',
+        status: status || 'New',
         scamType: scamType || 'Tech Support',
         organization: organization ? organization.trim() : null,
         notes: notes ? notes.trim() : null,
+        totalTimeSpent: typeof totalTimeSpent === 'number' ? totalTimeSpent : Number(totalTimeSpent) || 0,
+        targetValue: typeof targetValue === 'number' ? targetValue : Number(targetValue) || 0,
+        priority: typeof priority === 'number' ? priority : Number(priority) || 1,
+        carrier: carrier ? carrier.trim() : null,
+        location: location ? location.trim() : null,
+        dangerLevel: dangerLevel || 'medium',
+        flagged: Boolean(flagged),
         userId: req.user?.id,
       },
       include: {
@@ -318,6 +444,69 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
   } catch (error) {
     console.error('Create scammer error:', error);
     return res.status(500).json({ error: 'Failed to create scammer.' });
+  }
+});
+
+// Bulk import scammers from CSV
+apiRouter.post('/scammers/bulk-import', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No items provided for import.' });
+    }
+
+    const createdItems = [];
+    const errors = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.fullName || !item.phoneNumber) {
+        errors.push(`Row ${i + 1}: Missing Full Name or Phone Number`);
+        continue;
+      }
+
+      try {
+        const created = await prisma.scammer.create({
+          data: {
+            fullName: String(item.fullName).trim(),
+            alias: item.alias ? String(item.alias).trim() : null,
+            phoneNumber: String(item.phoneNumber).trim(),
+            status: item.status ? String(item.status).trim() : 'New',
+            carrier: item.carrier ? String(item.carrier).trim() : null,
+            location: item.location ? String(item.location).trim() : null,
+            scamType: item.scamType ? String(item.scamType).trim() : 'Tech Support',
+            organization: item.organization ? String(item.organization).trim() : null,
+            flagged: Boolean(item.flagged === true || item.flagged === 'true' || item.flagged === '1' || item.flagged === 'TRUE'),
+            dangerLevel: item.dangerLevel ? String(item.dangerLevel).toLowerCase().trim() : 'medium',
+            notes: item.notes ? String(item.notes).trim() : null,
+            victimGivenInfo: item.victimGivenInfo ? String(item.victimGivenInfo).trim() : null,
+            remoteAccessId: item.remoteAccessId ? String(item.remoteAccessId).trim() : null,
+            ipAddress: item.ipAddress ? String(item.ipAddress).trim() : null,
+            targetValue: Number(item.targetValue) || 0,
+            priority: Math.min(3, Math.max(1, Number(item.priority) || 1)),
+            totalTimeSpent: Number(item.totalTimeSpent) || 0,
+            userId: req.user?.id,
+          },
+          include: {
+            calls: true,
+            fraudAccounts: true,
+          },
+        });
+        createdItems.push({ ...created, todayTimeSpent: 0 });
+      } catch (err: any) {
+        errors.push(`Row ${i + 1} (${item.fullName}): ${err.message}`);
+      }
+    }
+
+    return res.json({
+      success: true,
+      importedCount: createdItems.length,
+      scammers: createdItems,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (error) {
+    console.error('Bulk import error:', error);
+    return res.status(500).json({ error: 'Failed to process bulk import.' });
   }
 });
 
@@ -340,6 +529,8 @@ apiRouter.put('/scammers/:id', requireAuth, async (req, res) => {
       remoteAccessId,
       ipAddress,
       notes,
+      targetValue,
+      priority,
     } = req.body;
 
     const updated = await prisma.scammer.update({
@@ -359,6 +550,8 @@ apiRouter.put('/scammers/:id', requireAuth, async (req, res) => {
         ...(remoteAccessId !== undefined && { remoteAccessId }),
         ...(ipAddress !== undefined && { ipAddress }),
         ...(notes !== undefined && { notes }),
+        ...(targetValue !== undefined && { targetValue: Number(targetValue) || 0 }),
+        ...(priority !== undefined && { priority: Number(priority) || 1 }),
       },
       include: {
         calls: { orderBy: { date: 'desc' } },
@@ -592,21 +785,39 @@ apiRouter.get('/analytics/monthly', requireAuth, async (_req, res) => {
     });
 
     const allScammers = await prisma.scammer.findMany({
-      include: { fraudAccounts: true },
+      include: {
+        fraudAccounts: true,
+        calls: true,
+      },
     });
 
-    // Today's total time
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
 
+    // 1. Today's total time & calls
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
     const todayCalls = allCalls.filter((c) => new Date(c.date) >= today);
     const todayTotalMinutes = todayCalls.reduce((sum, c) => sum + c.durationMinutes, 0);
 
+    // 2. This Week's total time & calls (starting from Monday 00:00)
+    const dayOfWeek = now.getDay(); // 0 is Sun, 1 is Mon...
+    const distToMonday = (dayOfWeek + 6) % 7;
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - distToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const weekCalls = allCalls.filter((c) => new Date(c.date) >= startOfWeek);
+    const weekTotalMinutes = weekCalls.reduce((sum, c) => sum + c.durationMinutes, 0);
+
+    // 3. This Month's total time & calls
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const monthCalls = allCalls.filter((c) => new Date(c.date) >= startOfMonth);
+    const monthTotalMinutes = monthCalls.reduce((sum, c) => sum + c.durationMinutes, 0);
+
     // Group calls by Month (last 6 months)
     const monthsMap: Record<string, { month: string; minutes: number; callsCount: number }> = {};
-
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const now = new Date();
 
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -630,7 +841,67 @@ apiRouter.get('/analytics/monthly', requireAuth, async (_req, res) => {
       estimatedSavings: Math.round((m.minutes / 60) * 850),
     }));
 
-    // Pipeline summary
+    // Weekly breakdown for the last 4 weeks
+    const weeklyBreakdown = [];
+    for (let w = 3; w >= 0; w--) {
+      const wStart = new Date(startOfWeek);
+      wStart.setDate(wStart.getDate() - w * 7);
+      const wEnd = new Date(wStart);
+      wEnd.setDate(wEnd.getDate() + 7);
+
+      const callsInW = allCalls.filter((c) => {
+        const cd = new Date(c.date);
+        return cd >= wStart && cd < wEnd;
+      });
+      const mins = callsInW.reduce((sum, c) => sum + c.durationMinutes, 0);
+      const label = w === 0 ? 'This Week' : w === 1 ? 'Last Week' : `${w} Wks Ago`;
+      weeklyBreakdown.push({
+        weekLabel: label,
+        minutes: mins,
+        hours: Number((mins / 60).toFixed(1)),
+        callsCount: callsInW.length,
+      });
+    }
+
+    // Top 5 Baited Scammers Leaderboard
+    const topBaitedScammers = [...allScammers]
+      .sort((a, b) => (b.totalTimeSpent || 0) - (a.totalTimeSpent || 0))
+      .slice(0, 5)
+      .map((s) => ({
+        id: s.id,
+        fullName: s.fullName,
+        alias: s.alias,
+        phoneNumber: s.phoneNumber,
+        status: s.status,
+        scamType: s.scamType,
+        totalTimeSpent: s.totalTimeSpent,
+        callsCount: s.calls ? s.calls.length : 0,
+        organization: s.organization,
+      }));
+
+    // Scam type breakdown
+    const scamTypeMap: Record<string, { count: number; minutes: number }> = {};
+    allScammers.forEach((s) => {
+      const type = s.scamType || 'Tech Support';
+      if (!scamTypeMap[type]) {
+        scamTypeMap[type] = { count: 0, minutes: 0 };
+      }
+      scamTypeMap[type].count += 1;
+      scamTypeMap[type].minutes += s.totalTimeSpent || 0;
+    });
+
+    const totalScammersCount = allScammers.length || 1;
+    const scamTypeBreakdown = Object.entries(scamTypeMap)
+      .map(([type, data]) => ({
+        type,
+        count: data.count,
+        minutes: data.minutes,
+        hours: Number((data.minutes / 60).toFixed(1)),
+        percentage: Math.round((data.count / totalScammersCount) * 100),
+      }))
+      .sort((a, b) => b.minutes - a.minutes);
+
+    // Status breakdown counts
     const pipelineCounts: Record<string, number> = {
       'New Scammer': 0,
       'Actively baiting': 0,
@@ -644,21 +915,42 @@ apiRouter.get('/analytics/monthly', requireAuth, async (_req, res) => {
       }
     });
 
-    // Total fraud accounts flagged
-    const totalFraudAccounts = allScammers.reduce((sum, s) => sum + s.fraudAccounts.length, 0);
-    const totalWastedMinutes = allCalls.reduce((sum, c) => sum + c.durationMinutes, 0);
+    // Fraud accounts
+    const allFraudAccounts = allScammers.flatMap((s) => s.fraudAccounts);
+    const totalFraudAccounts = allFraudAccounts.length;
+    const reportedFraudAccounts = allFraudAccounts.filter((f) => f.reportedToBank).length;
+
+    // Total minutes wasted across all scammers & calls
+    const scammerSumTime = allScammers.reduce((sum, s) => sum + (s.totalTimeSpent || 0), 0);
+    const callsSumTime = allCalls.reduce((sum, c) => sum + c.durationMinutes, 0);
+    const totalWastedMinutes = Math.max(scammerSumTime, callsSumTime);
+    const totalWastedHours = Number((totalWastedMinutes / 60).toFixed(1));
+
+    const averageCallDurationMinutes =
+      allCalls.length > 0 ? Math.round(totalWastedMinutes / allCalls.length) : 0;
+    const estimatedLossPreventedTotal = Math.round((totalWastedMinutes / 60) * 850);
 
     return res.json({
       monthlyData,
       summary: {
         todayTotalMinutes,
         todayCallsCount: todayCalls.length,
+        weekTotalMinutes,
+        weekCallsCount: weekCalls.length,
+        monthTotalMinutes,
+        monthCallsCount: monthCalls.length,
         totalWastedMinutes,
-        totalWastedHours: Number((totalWastedMinutes / 60).toFixed(1)),
+        totalWastedHours,
         totalScammers: allScammers.length,
         pipelineCounts,
         totalFraudAccounts,
+        reportedFraudAccounts,
         flaggedScammersCount: allScammers.filter((s) => s.flagged).length,
+        averageCallDurationMinutes,
+        estimatedLossPreventedTotal,
+        scamTypeBreakdown,
+        topBaitedScammers,
+        weeklyBreakdown,
       },
     });
   } catch (error) {

@@ -47,6 +47,8 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [status, setStatus] = useState<PipelineStatus>(scammer.status);
   const [flagged, setFlagged] = useState<boolean>(scammer.flagged);
   const [dangerLevel, setDangerLevel] = useState(scammer.dangerLevel);
+  const [targetValue, setTargetValue] = useState<number>(scammer.targetValue || 0);
+  const [priority, setPriority] = useState<number>(scammer.priority || 1);
   const [carrier, setCarrier] = useState(scammer.carrier || '');
   const [location, setLocation] = useState(scammer.location || '');
   const [scamType, setScamType] = useState(scammer.scamType);
@@ -93,6 +95,8 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         status,
         flagged,
         dangerLevel,
+        targetValue,
+        priority,
         carrier,
         location,
         scamType,
@@ -785,7 +789,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           {activeTab === 'overview' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Pipeline Category */}
+                {/* Pipeline Stage */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                     Pipeline Stage
@@ -793,13 +797,66 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   <select
                     value={status}
                     onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-rose-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 font-medium"
                   >
-                    <option value="New Scammer">New Scammer</option>
-                    <option value="Actively baiting">Actively baiting</option>
-                    <option value="Payment Pending">Payment Pending</option>
-                    <option value="Revealed / Reported">Revealed / Reported</option>
+                    <option value="New">1. New (Lead / Incoming)</option>
+                    <option value="Qualified">2. Qualified (Active Session)</option>
+                    <option value="Proposition">3. Proposition (Payment Pending)</option>
+                    <option value="Won">4. Won (Neutralized / Reported)</option>
+                    <option value="New Scammer">New Scammer (Legacy)</option>
+                    <option value="Actively baiting">Actively baiting (Legacy)</option>
+                    <option value="Payment Pending">Payment Pending (Legacy)</option>
+                    <option value="Revealed / Reported">Revealed / Reported (Legacy)</option>
                   </select>
+                </div>
+
+                {/* Target Value in Dollars */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Target Deal / Fraud Amount ($)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={targetValue}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0;
+                      setTargetValue(val);
+                      handleSaveScammerInfo({ targetValue: val });
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold focus:ring-2 focus:ring-emerald-500"
+                    placeholder="e.g. 24000"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Priority Rating */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Priority Rating
+                  </label>
+                  <div className="flex items-center gap-2 h-9 px-3 bg-slate-950 border border-slate-800 rounded-xl">
+                    {[1, 2, 3].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => {
+                          setPriority(star);
+                          handleSaveScammerInfo({ priority: star });
+                        }}
+                        className="text-base transition hover:scale-125"
+                      >
+                        <span className={star <= priority ? 'text-amber-400' : 'text-slate-700'}>
+                          ★
+                        </span>
+                      </button>
+                    ))}
+                    <span className="text-[11px] text-slate-400 ml-2">
+                      {priority === 1 ? 'Standard' : priority === 2 ? 'High Interest' : 'Top Priority'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Danger Level */}

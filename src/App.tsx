@@ -7,7 +7,7 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard.tsx';
 import { QuickAddScammerModal } from './components/QuickAddScammerModal.tsx';
 import { ScammerDetailModal } from './components/ScammerDetailModal.tsx';
 import { AdminUserManagement } from './components/AdminUserManagement.tsx';
-import type { User, Scammer, PipelineStatus } from './types.ts';
+import type { User, Scammer, PipelineStatus, CanonicalStatus } from './types.ts';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(getStoredUser());
@@ -18,6 +18,7 @@ export default function App() {
   const [loadingScammers, setLoadingScammers] = useState<boolean>(false);
   const [selectedScammer, setSelectedScammer] = useState<Scammer | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
+  const [quickAddStatus, setQuickAddStatus] = useState<CanonicalStatus>('New');
 
   // Views and filters
   const [activeView, setActiveView] = useState<'pipeline' | 'analytics' | 'users'>('pipeline');
@@ -169,7 +170,7 @@ export default function App() {
       />
 
       {/* Main Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
+      <main className="flex-1 max-w-[1800px] w-full mx-auto p-3 sm:p-5 lg:p-6">
         {activeView === 'pipeline' ? (
           <div className="space-y-4">
             {/* Header controls for mobile */}
@@ -193,7 +194,23 @@ export default function App() {
                 scammers={filteredScammers}
                 onSelectScammer={(s) => setSelectedScammer(s)}
                 onMovePipeline={handleMovePipeline}
-                onQuickAdd={() => setIsQuickAddOpen(true)}
+                onQuickAdd={(status) => {
+                  setQuickAddStatus(status || 'New');
+                  setIsQuickAddOpen(true);
+                }}
+                onUpdateScammer={async (scammerId, data) => {
+                  try {
+                    const res = await api.updateScammer(scammerId, data);
+                    handleUpdateScammer(res.scammer);
+                  } catch (err) {
+                    console.error('Failed to update scammer:', err);
+                  }
+                }}
+                onBulkImportSuccess={(newScammers) => {
+                  setScammers((prev) => [...newScammers, ...prev]);
+                  setRefreshTrigger((c) => c + 1);
+                }}
+                onScammerCreated={handleScammerCreated}
               />
             )}
           </div>
@@ -209,6 +226,7 @@ export default function App() {
         isOpen={isQuickAddOpen}
         onClose={() => setIsQuickAddOpen(false)}
         onCreated={handleScammerCreated}
+        initialStatus={quickAddStatus}
       />
 
       {/* Scammer Dossier & Call Log Modal */}

@@ -6,7 +6,27 @@ export interface User {
   role: string;
 }
 
-export type PipelineStatus = 'New Scammer' | 'Actively baiting' | 'Payment Pending' | 'Revealed / Reported';
+export type PipelineStatus =
+  | 'New'
+  | 'Qualified'
+  | 'Proposition'
+  | 'Won'
+  | 'New Scammer'
+  | 'Actively baiting'
+  | 'Payment Pending'
+  | 'Revealed / Reported';
+
+export type CanonicalStatus = 'New' | 'Qualified' | 'Proposition' | 'Won';
+
+export function toCanonicalStatus(status?: string | null): CanonicalStatus {
+  if (!status) return 'New';
+  const s = status.trim().toLowerCase();
+  if (s === 'new' || s.includes('new')) return 'New';
+  if (s === 'qualified' || s.includes('qualif') || s.includes('bait')) return 'Qualified';
+  if (s === 'proposition' || s.includes('prop') || s.includes('payment') || s.includes('pend')) return 'Proposition';
+  if (s === 'won' || s.includes('won') || s.includes('reveal') || s.includes('report') || s.includes('close')) return 'Won';
+  return 'New';
+}
 
 export interface CallLog {
   id: string;
@@ -46,6 +66,8 @@ export interface Scammer {
   organization?: string | null;
   flagged: boolean;
   dangerLevel: 'low' | 'medium' | 'high' | 'critical';
+  targetValue?: number; // target deal or fraud amount in dollars
+  priority?: number; // 1-3 star priority rating
   victimGivenInfo?: string | null;
   remoteAccessId?: string | null;
   ipAddress?: string | null;
@@ -87,15 +109,52 @@ export interface MonthlyDataPoint {
   estimatedSavings: number;
 }
 
+export interface WeeklyDataPoint {
+  weekLabel: string;
+  minutes: number;
+  hours: number;
+  callsCount: number;
+}
+
+export interface ScamTypeStat {
+  type: string;
+  count: number;
+  minutes: number;
+  hours: number;
+  percentage: number;
+}
+
+export interface TopBaitedScammer {
+  id: string;
+  fullName: string;
+  alias?: string | null;
+  phoneNumber: string;
+  status: string;
+  scamType: string;
+  totalTimeSpent: number;
+  callsCount: number;
+  organization?: string | null;
+}
+
 export interface AnalyticsSummary {
   todayTotalMinutes: number;
   todayCallsCount: number;
+  weekTotalMinutes: number;
+  weekCallsCount: number;
+  monthTotalMinutes: number;
+  monthCallsCount: number;
   totalWastedMinutes: number;
   totalWastedHours: number;
   totalScammers: number;
   pipelineCounts: Record<PipelineStatus, number>;
   totalFraudAccounts: number;
+  reportedFraudAccounts: number;
   flaggedScammersCount: number;
+  averageCallDurationMinutes: number;
+  estimatedLossPreventedTotal: number;
+  scamTypeBreakdown?: ScamTypeStat[];
+  topBaitedScammers?: TopBaitedScammer[];
+  weeklyBreakdown?: WeeklyDataPoint[];
 }
 
 export interface CarrierIntel {

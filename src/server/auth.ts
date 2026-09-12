@@ -59,8 +59,8 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     return res.status(401).json({ error: 'User not found in database.' });
   }
 
-  // Check if this user matches the configured ADMIN_USER env
-  const adminEnvUser = process.env.ADMIN_USER?.toLowerCase().trim();
+  // Check if this user matches the configured ADMIN_USER env (default sbadmin@cookiebaits)
+  const adminEnvUser = (process.env.ADMIN_USER || 'sbadmin@cookiebaits').toLowerCase().trim();
   if (adminEnvUser && dbUser.email.toLowerCase().trim() === adminEnvUser && dbUser.role !== 'admin') {
     dbUser.role = 'admin';
   }
@@ -71,16 +71,20 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 
 export function isAdminUser(user: AuthUser | { email?: string; role?: string } | null | undefined): boolean {
   if (!user) return false;
-  const adminEnvUser = process.env.ADMIN_USER?.toLowerCase().trim();
-  if (adminEnvUser && user.email?.toLowerCase().trim() === adminEnvUser) {
+  const userEmail = user.email?.toLowerCase().trim();
+  const adminEnvUser = (process.env.ADMIN_USER || 'sbadmin@cookiebaits').toLowerCase().trim();
+  if (userEmail && (userEmail === adminEnvUser || userEmail === 'sbadmin@cookiebaits')) {
+    return true;
+  }
+  const testerEnvUser = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
+  if (userEmail && (userEmail === testerEnvUser || userEmail === 'cookiescambait@gmail.com')) {
     return true;
   }
   const role = (user.role || '').toLowerCase();
   return (
     role === 'admin' ||
     role === 'admin_scambaiter' ||
-    role.includes('admin') ||
-    user.email === 'cookiescambait@gmail.com'
+    role.includes('admin')
   );
 }
 

@@ -1,5 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Lock, Mail, User as UserIcon, CheckCircle2, AlertCircle, Sparkles, Terminal, PhoneCall, Clock, Database, Server } from 'lucide-react';
+import {
+  Shield,
+  Lock,
+  Mail,
+  User as UserIcon,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  PhoneCall,
+  Clock,
+  Database,
+  Server,
+  Settings,
+  Copy,
+  Check,
+  X,
+  ExternalLink,
+} from 'lucide-react';
 import { api } from '../api.ts';
 import type { User } from '../types.ts';
 
@@ -16,6 +33,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [configuredClientId, setConfiguredClientId] = useState<string>('');
+  const [configAdminUser, setConfigAdminUser] = useState<string>('sbadmin@cookiebaits');
+  const [configTesterUser, setConfigTesterUser] = useState<string>('cookiescambait@gmail.com');
+  const [dbSource, setDbSource] = useState<string>('Default SQLite (prisma/scambaiter.db)');
+  const [googleOAuthActive, setGoogleOAuthActive] = useState<boolean>(false);
+  const [showDokployModal, setShowDokployModal] = useState<boolean>(false);
+  const [copied, setCopied] = useState<boolean>(false);
 
   // Initialize Google Identity Services if client ID is configured
   useEffect(() => {
@@ -25,8 +48,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
       let clientId = ((import.meta as any).env?.VITE_GOOGLE_CLIENT_ID as string) || '';
       try {
         const config = await api.getConfig();
-        if (config?.googleClientId) {
-          clientId = config.googleClientId;
+        if (config) {
+          if (config.adminUser) setConfigAdminUser(config.adminUser);
+          if (config.testerUser) setConfigTesterUser(config.testerUser);
+          if (config.dbSource) setDbSource(config.dbSource);
+          if (config.googleOAuthEnabled) setGoogleOAuthActive(true);
+          if (config.googleClientId) {
+            clientId = config.googleClientId;
+            setConfiguredClientId(clientId);
+            setGoogleOAuthActive(true);
+          }
         }
       } catch {
         // Fallback to client-side env
@@ -91,8 +122,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
     setError(null);
     setGoogleLoading(true);
     try {
-      const emailToUse = customEmail || email || 'cookiescambait@gmail.com';
-      const nameToUse = emailToUse === 'cookiescambait@gmail.com' ? 'Cookie Scambaiter' : 'Scambaiter Agent';
+      const emailToUse = customEmail || email || configTesterUser || 'cookiescambait@gmail.com';
+      const nameToUse =
+        emailToUse === 'cookiescambait@gmail.com'
+          ? 'Cookie Scambaiter'
+          : emailToUse === 'sbadmin@cookiebaits'
+          ? 'SB Admin'
+          : 'Scambaiter Operator';
       const res = await api.googleAuth({
         email: emailToUse,
         name: nameToUse,
@@ -107,10 +143,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
     }
   };
 
-  const handleFillDemo = () => {
-    setEmail('cookiescambait@gmail.com');
+  const handleFillAdmin = () => {
+    setEmail(configAdminUser || 'sbadmin@cookiebaits');
+    setPassword('sbAdmin2026!#');
+    setError(null);
+  };
+
+  const handleFillTester = () => {
+    setEmail(configTesterUser || 'cookiescambait@gmail.com');
     setPassword('scambaiter123');
     setError(null);
+  };
+
+  const dokployEnvSnippet = `# Dokploy Environment Settings for Scambaiter CRM
+ADMIN_USER="${configAdminUser}"
+ADMIN_PASS="sbAdmin2026!#"
+TESTER_USER="${configTesterUser}"
+TESTER_PASS="scambaiter123"
+DB="file:./prisma/scambaiter.db"
+GOOGLE_CLIENT_ID="${configuredClientId || 'your-google-oauth-client-id.apps.googleusercontent.com'}"
+JWT_SECRET="super-secret-scambaiter-crm-token-2026"`;
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(dokployEnvSnippet);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -255,7 +312,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
             )}
 
             {/* Google / Gmail Sign In Section */}
-            <div className="space-y-3 mb-6">
+            <div className="space-y-2 mb-6">
+              <div className="flex items-center justify-between text-xs px-0.5">
+                <span className="text-slate-400 font-medium">Google Authentication</span>
+                {googleOAuthActive ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    OAuth Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-mono">
+                    <AlertCircle className="w-3 h-3 text-amber-400" />
+                    Ready &bull; Add Client ID
+                  </span>
+                )}
+              </div>
+
               <button
                 type="button"
                 id="google-login-btn"
@@ -277,10 +349,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
                   }
                   handleQuickGoogleLogin();
                 }}
-                className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white font-medium text-sm transition hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white font-medium text-sm transition hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 cursor-pointer shadow-sm"
               >
                 {/* Official Google 'G' Icon */}
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -301,7 +373,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
                 <span>{googleLoading ? 'Connecting Google API...' : 'Continue with Google / Gmail'}</span>
               </button>
 
-              <div className="relative flex items-center justify-center">
+              <div className="relative flex items-center justify-center pt-2">
                 <div className="border-t border-slate-800 w-full"></div>
                 <span className="bg-slate-900 px-3 text-[11px] text-slate-500 uppercase tracking-wider font-semibold">
                   or email login
@@ -338,7 +410,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
                     type="email"
                     id="input-email"
                     required
-                    placeholder="you@gmail.com"
+                    placeholder="you@cookiebaits or you@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
@@ -366,7 +438,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
                 type="submit"
                 id="submit-auth-btn"
                 disabled={loading}
-                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-semibold text-sm transition shadow-lg shadow-rose-950/50 flex items-center justify-center gap-2"
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-semibold text-sm transition shadow-lg shadow-rose-950/50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {loading ? (
                   <span className="inline-block w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
@@ -376,28 +448,144 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
               </button>
             </form>
 
-            {/* Demo Helper Pill */}
-            <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                Pre-seeded Admin User
-              </span>
-              <button
-                type="button"
-                id="fill-demo-btn"
-                onClick={handleFillDemo}
-                className="text-amber-400 hover:text-amber-300 font-medium hover:underline text-xs"
-              >
-                Auto-fill Demo Credentials
-              </button>
+            {/* Quick Fill & Dokploy Environment Helpers */}
+            <div className="mt-5 pt-4 border-t border-slate-800/80 space-y-2.5 text-xs text-slate-400">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-medium text-slate-300">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Quick Login Credentials
+                </span>
+                <button
+                  type="button"
+                  id="open-dokploy-guide-btn"
+                  onClick={() => setShowDokployModal(true)}
+                  className="text-slate-400 hover:text-white flex items-center gap-1 transition text-xs"
+                >
+                  <Settings className="w-3.5 h-3.5 text-rose-400" />
+                  Dokploy Settings
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  id="fill-admin-btn"
+                  onClick={handleFillAdmin}
+                  className="py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 text-slate-200 text-left transition flex flex-col cursor-pointer"
+                >
+                  <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">Admin</span>
+                  <span className="text-xs truncate font-mono text-slate-300">{configAdminUser}</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="fill-tester-btn"
+                  onClick={handleFillTester}
+                  className="py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 text-slate-200 text-left transition flex flex-col cursor-pointer"
+                >
+                  <span className="text-[10px] text-rose-400 font-semibold uppercase tracking-wider">Tester</span>
+                  <span className="text-xs truncate font-mono text-slate-300">{configTesterUser}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </main>
 
+      {/* Dokploy Environment Settings Modal */}
+      {showDokployModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-950/40">
+                  <Server className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                    Dokploy Environment Configuration
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Paste these parameters into Dokploy &gt; Your Application &gt; Environment
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDokployModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-300 font-semibold">Environment Variables Block</span>
+                <button
+                  type="button"
+                  id="copy-dokploy-snippet-btn"
+                  onClick={copyToClipboard}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium transition cursor-pointer"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Copied to Clipboard!' : 'Copy Config Block'}
+                </button>
+              </div>
+
+              <div className="relative">
+                <pre className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto whitespace-pre leading-relaxed">
+                  {dokployEnvSnippet}
+                </pre>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                  <span className="font-semibold text-amber-400 block mb-1">ADMIN_USER & ADMIN_PASS</span>
+                  <p className="text-slate-400">
+                    Primary administrative credentials (changed to <code className="text-slate-200">sbadmin@cookiebaits</code>). Grants full CRM control, user creation, role assignment, and deletion powers.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                  <span className="font-semibold text-rose-400 block mb-1">TESTER_USER & TESTER_PASS</span>
+                  <p className="text-slate-400">
+                    Dedicated testing/operator account (defaults to <code className="text-slate-200">cookiescambait@gmail.com</code>). Pre-seeded and synchronized on container startup.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                  <span className="font-semibold text-blue-400 block mb-1">DB Parameter</span>
+                  <p className="text-slate-400">
+                    Path to the SQLite database file holding registered users & scammer records. In Dokploy, you can mount a persistent volume (e.g. <code className="text-slate-200">/data/crm.db</code>) and set <code className="text-slate-200">DB=file:/data/crm.db</code>.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                  <span className="font-semibold text-emerald-400 block mb-1">GOOGLE_CLIENT_ID</span>
+                  <p className="text-slate-400">
+                    Your Google OAuth 2.0 Web Client ID from Google Cloud Console. Enables direct "Continue with Google" authentication for any team member.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-800 pt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDokployModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer Info */}
       <footer className="border-t border-slate-800/80 px-6 py-4 text-center text-xs text-slate-500">
-        Scambaiter CRM Tracker &bull; Persistent SQLite & Prisma Backend &bull; Dokploy, Traefik & Cloudflare S3 Ready
+        Scambaiter CRM Tracker &bull; Persistent DB Source: {dbSource} &bull; Dokploy, Traefik & Cloudflare S3 Ready
       </footer>
     </div>
   );

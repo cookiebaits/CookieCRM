@@ -3,55 +3,124 @@ import { hashPassword } from './auth.ts';
 
 export async function seedInitialData() {
   try {
-    // If ADMIN_USER & ADMIN_PASS are specified in environment (Dokploy deployment), ensure admin user exists and is up to date
-    const adminUserEmail = process.env.ADMIN_USER?.toLowerCase().trim();
-    const adminPass = process.env.ADMIN_PASS?.trim();
+    // 1. ADMIN USER Provisioning / Synchronization (Dokploy Environment Settings)
+    // Default admin username changed from tester@cookiebaits to sbadmin@cookiebaits
+    const adminUserEmail = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
+      ? process.env.ADMIN_USER.toLowerCase().trim()
+      : 'sbadmin@cookiebaits';
+    const adminPass = process.env.ADMIN_PASS?.trim() || 'sbAdmin2026!#';
+    const hashedAdminPass = await hashPassword(adminPass);
 
-    if (adminUserEmail && adminPass) {
-      const existingAdmin = await prisma.user.findUnique({
-        where: { email: adminUserEmail },
+    // If legacy tester@cookiebaits or admin@scambaiter.local exists, migrate records to sbadmin@cookiebaits
+    const legacyAdmin = await prisma.user.findFirst({
+      where: {
+        email: {
+          in: ['tester@cookiebaits', 'admin@scambaiter.local'],
+        },
+      },
+    });
+
+    if (legacyAdmin) {
+      const targetAlreadyExists = await prisma.user.findUnique({
+        where: { email: 'sbadmin@cookiebaits' },
       });
-      const hashedPassword = await hashPassword(adminPass);
-
-      if (existingAdmin) {
+      if (!targetAlreadyExists) {
         await prisma.user.update({
-          where: { id: existingAdmin.id },
+          where: { id: legacyAdmin.id },
           data: {
-            password: hashedPassword,
+            email: 'sbadmin@cookiebaits',
+            name: 'SB Admin',
+            password: hashedAdminPass,
             role: 'admin',
           },
         });
-        console.log(`[Admin] Synchronized admin user credentials for: ${adminUserEmail}`);
+        console.log(`[Admin] Migrated legacy user ${legacyAdmin.email} to sbadmin@cookiebaits`);
+      }
+    }
+
+    // Ensure sbadmin@cookiebaits exists and has active credentials
+    const existingSbAdmin = await prisma.user.findUnique({
+      where: { email: 'sbadmin@cookiebaits' },
+    });
+
+    let primaryAdminUser;
+    if (existingSbAdmin) {
+      primaryAdminUser = await prisma.user.update({
+        where: { id: existingSbAdmin.id },
+        data: {
+          password: hashedAdminPass,
+          role: 'admin',
+        },
+      });
+      console.log(`[Admin] Synchronized admin credentials for: sbadmin@cookiebaits`);
+    } else {
+      primaryAdminUser = await prisma.user.create({
+        data: {
+          email: 'sbadmin@cookiebaits',
+          name: 'SB Admin',
+          password: hashedAdminPass,
+          role: 'admin',
+          avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+        },
+      });
+      console.log(`[Admin] Provisioned new primary admin user: sbadmin@cookiebaits`);
+    }
+
+    // Also synchronize custom ADMIN_USER from Dokploy if set and different from sbadmin@cookiebaits
+    if (adminUserEmail !== 'sbadmin@cookiebaits') {
+      const existingCustomAdmin = await prisma.user.findUnique({
+        where: { email: adminUserEmail },
+      });
+      if (existingCustomAdmin) {
+        await prisma.user.update({
+          where: { id: existingCustomAdmin.id },
+          data: { password: hashedAdminPass, role: 'admin' },
+        });
       } else {
         await prisma.user.create({
           data: {
             email: adminUserEmail,
-            name: 'Command Administrator',
-            password: hashedPassword,
+            name: 'Dokploy Admin',
+            password: hashedAdminPass,
             role: 'admin',
-            avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
           },
         });
-        console.log(`[Admin] Provisioned new primary admin user from environment: ${adminUserEmail}`);
       }
     }
 
-    const userCount = await prisma.user.count();
-    let defaultUser = await prisma.user.findFirst();
+    // 2. TESTER USER Provisioning / Synchronization (Dokploy Environment Settings)
+    // Default tester username is cookiescambait@gmail.com
+    const testerUserEmail = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
+    const testerPass = process.env.TESTER_PASS?.trim() || 'scambaiter123';
+    const hashedTesterPass = await hashPassword(testerPass);
 
-    if (userCount === 0) {
-      const hashedPassword = await hashPassword('scambaiter123');
-      defaultUser = await prisma.user.create({
+    const existingTester = await prisma.user.findUnique({
+      where: { email: testerUserEmail },
+    });
+
+    let primaryTesterUser;
+    if (existingTester) {
+      primaryTesterUser = await prisma.user.update({
+        where: { id: existingTester.id },
         data: {
-          email: 'cookiescambait@gmail.com',
+          password: hashedTesterPass,
+        },
+      });
+      console.log(`[Tester] Synchronized tester credentials for: ${testerUserEmail}`);
+    } else {
+      primaryTesterUser = await prisma.user.create({
+        data: {
+          email: testerUserEmail,
           name: 'Cookie Scambaiter',
-          password: hashedPassword,
+          password: hashedTesterPass,
           role: 'admin_scambaiter',
           avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         },
       });
-      console.log('Seeded default scambaiter user cookiescambait@gmail.com');
+      console.log(`[Tester] Provisioned tester user: ${testerUserEmail}`);
     }
+
+    let defaultUser = primaryTesterUser || primaryAdminUser;
 
     const scammerCount = await prisma.scammer.count();
     if (scammerCount === 0 && defaultUser) {

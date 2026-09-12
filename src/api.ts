@@ -111,10 +111,34 @@ export const api = {
     scamType?: string;
     organization?: string;
     notes?: string;
+    targetValue?: number;
+    priority?: number;
+    carrier?: string;
+    location?: string;
+    dangerLevel?: string;
+    flagged?: boolean;
+    totalTimeSpent?: number;
   }): Promise<{ scammer: Scammer }> {
     return request<{ scammer: Scammer }>('/api/scammers', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  async bulkImportScammers(items: any[]): Promise<{
+    success: boolean;
+    importedCount: number;
+    scammers: Scammer[];
+    errors?: string[];
+  }> {
+    return request<{
+      success: boolean;
+      importedCount: number;
+      scammers: Scammer[];
+      errors?: string[];
+    }>('/api/scammers/bulk-import', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
     });
   },
 
@@ -231,7 +255,14 @@ export const api = {
     });
   },
 
-  async getConfig(): Promise<{ googleClientId: string }> {
+  async getConfig(): Promise<{
+    googleClientId: string;
+    googleOAuthEnabled: boolean;
+    adminUser: string;
+    testerUser: string;
+    dbSource: string;
+    appUrl: string;
+  }> {
     return request('/api/config');
   },
 
