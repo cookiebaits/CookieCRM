@@ -16,15 +16,15 @@ services:
       - JWT_SECRET=${JWT_SECRET:-super-secret-dokploy-scambaiter-key-2026}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - APP_URL=${APP_URL:-https://your-domain.com}
+      - APP_URL=${APP_URL:-https://pm.cookiebaits.com}
     volumes:
       # Persistent volume for Dokploy Cloudflare S3 backup
       - scambaiter_db_data:/app/prisma
     labels:
       # Traefik configuration for Dokploy
       - "traefik.enable=true"
-      - "traefik.http.routers.scambaiter.rule=Host(`${DOMAIN:-scambaiter.yourdomain.com}`)"
-      - "traefik.http.routers.scambaiter.entrypoints=websecure"
+      - "traefik.http.routers.scambaiter.rule=Host(`${DOMAIN:-pm.cookiebaits.com}`)"
+      - "traefik.http.routers.scambaiter.entrypoints=web,websecure"
       - "traefik.http.routers.scambaiter.tls.certresolver=letsencrypt"
       - "traefik.http.services.scambaiter.loadbalancer.server.port=3000"
       # Cloudflare real IP & secure headers

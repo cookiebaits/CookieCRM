@@ -8,7 +8,7 @@ backendApp.use(express.json({ limit: '25mb' }));
 backendApp.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Trust reverse proxies (Traefik / Cloudflare)
-backendApp.set('trust proxy', 1);
+backendApp.set('trust proxy', true);
 
 // Mount API router
 backendApp.use('/api', apiRouter);
