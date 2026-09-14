@@ -15,7 +15,8 @@ import {
   Copy,
   Check,
   X,
-  ExternalLink,
+  LogIn,
+  UserPlus,
 } from 'lucide-react';
 import { api } from '../api.ts';
 import type { User } from '../types.ts';
@@ -172,7 +173,7 @@ JWT_SECRET="super-secret-scambaiter-crm-token-2026"`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
-      {/* Top Banner */}
+      {/* Top Banner Header */}
       <header className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-950/50">
@@ -186,11 +187,33 @@ JWT_SECRET="super-secret-scambaiter-crm-token-2026"`;
           </div>
         </div>
 
+        {/* Top Header Buttons with Themed Colors */}
         <div className="flex items-center gap-3">
-          <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Prisma SQLite & Dokploy Ready
-          </span>
+          <button
+            type="button"
+            onClick={() => { setMode('login'); setError(null); }}
+            className={`px-4 py-2 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer ${
+              mode === 'login'
+                ? 'bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-rose-950/50 ring-2 ring-rose-500/30'
+                : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:border-rose-500/50'
+            }`}
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Login</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setMode('register'); setError(null); }}
+            className={`px-4 py-2 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer ${
+              mode === 'register'
+                ? 'bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-rose-950/50 ring-2 ring-rose-500/30'
+                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:border-amber-500/50'
+            }`}
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Sign Up</span>
+          </button>
         </div>
       </header>
 
@@ -270,7 +293,7 @@ JWT_SECRET="super-secret-scambaiter-crm-token-2026"`;
         {/* Right Column: Authentication Card */}
         <div className="lg:col-span-5">
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/60 relative overflow-hidden">
-            {/* Header Tabs */}
+            {/* Header Tabs with Themed Color Buttons */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
               <div>
                 <h3 className="text-xl font-bold text-white">
@@ -280,26 +303,34 @@ JWT_SECRET="super-secret-scambaiter-crm-token-2026"`;
                   {mode === 'login' ? 'Enter credentials to open your pipeline' : 'Join and secure your scammer database'}
                 </p>
               </div>
-              <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+
+              {/* Colorful Tab Selector */}
+              <div className="flex bg-slate-950 p-1.5 rounded-xl border border-slate-800 text-xs gap-1">
                 <button
                   type="button"
                   id="tab-login-btn"
                   onClick={() => { setMode('login'); setError(null); }}
-                  className={`px-3 py-1.5 rounded-md font-medium transition ${
-                    mode === 'login' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                    mode === 'login'
+                      ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-950/50'
+                      : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20'
                   }`}
                 >
-                  Sign In
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Login</span>
                 </button>
                 <button
                   type="button"
                   id="tab-signup-btn"
                   onClick={() => { setMode('register'); setError(null); }}
-                  className={`px-3 py-1.5 rounded-md font-medium transition ${
-                    mode === 'register' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                    mode === 'register'
+                      ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-md shadow-amber-950/50'
+                      : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20'
                   }`}
                 >
-                  Sign Up
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Sign Up</span>
                 </button>
               </div>
             </div>

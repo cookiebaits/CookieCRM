@@ -1,7 +1,6 @@
 # 🛡️ Scambaiter CRM
 
 Scambaiter CRM is an open-source, full-stack Customer Relationship Management (CRM) platform engineered specifically for scambaiters, counter-fraud researchers, and cybersecurity intelligence analysts. It allows users to track scam operations, log scammer contact details, store call recordings & evidence notes, analyze fraud trends, and generate AI-assisted bait strategies using Google Gemini.
-# Run and deploy your AI Studio app
 
 ---
 
