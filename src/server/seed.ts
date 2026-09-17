@@ -88,39 +88,16 @@ export async function seedInitialData() {
       }
     }
 
-    // 2. TESTER USER Provisioning / Synchronization (Dokploy Environment Settings)
-    // Default tester username is cookiescambait@gmail.com
-    const testerUserEmail = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
-    const testerPass = process.env.TESTER_PASS?.trim() || 'scambaiter123';
-    const hashedTesterPass = await hashPassword(testerPass);
-
-    const existingTester = await prisma.user.findUnique({
-      where: { email: testerUserEmail },
+    // Explicitly delete any legacy tester accounts
+    await prisma.user.deleteMany({
+      where: {
+        email: {
+          in: ['tester@cookiebaits', 'tester@scambaiter.local', 'tester@cookiebaits.local', 'tester', 'test@cookiebaits', 'bt@cookiebaits.local'],
+        },
+      },
     });
 
-    let primaryTesterUser;
-    if (existingTester) {
-      primaryTesterUser = await prisma.user.update({
-        where: { id: existingTester.id },
-        data: {
-          password: hashedTesterPass,
-        },
-      });
-      console.log(`[Tester] Synchronized tester credentials for: ${testerUserEmail}`);
-    } else {
-      primaryTesterUser = await prisma.user.create({
-        data: {
-          email: testerUserEmail,
-          name: 'Cookie Scambaiter',
-          password: hashedTesterPass,
-          role: 'admin_scambaiter',
-          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        },
-      });
-      console.log(`[Tester] Provisioned tester user: ${testerUserEmail}`);
-    }
-
-    let defaultUser = primaryTesterUser || primaryAdminUser;
+    const defaultUser = primaryAdminUser;
 
     const scammerCount = await prisma.scammer.count();
     if (scammerCount === 0 && defaultUser) {

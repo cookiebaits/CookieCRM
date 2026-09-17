@@ -259,7 +259,7 @@ export const api = {
     googleClientId: string;
     googleOAuthEnabled: boolean;
     adminUser: string;
-    testerUser: string;
+    testerUser?: string;
     dbSource: string;
     appUrl: string;
   }> {

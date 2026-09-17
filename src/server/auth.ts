@@ -73,11 +73,7 @@ export function isAdminUser(user: AuthUser | { email?: string; role?: string } |
   if (!user) return false;
   const userEmail = user.email?.toLowerCase().trim();
   const adminEnvUser = (process.env.ADMIN_USER || 'sbadmin@cookiebaits').toLowerCase().trim();
-  if (userEmail && (userEmail === adminEnvUser || userEmail === 'sbadmin@cookiebaits')) {
-    return true;
-  }
-  const testerEnvUser = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
-  if (userEmail && (userEmail === testerEnvUser || userEmail === 'cookiescambait@gmail.com')) {
+  if (userEmail && (userEmail === adminEnvUser || userEmail === 'sbadmin@cookiebaits' || userEmail === 'cookiescambait@gmail.com')) {
     return true;
   }
   const role = (user.role || '').toLowerCase();
