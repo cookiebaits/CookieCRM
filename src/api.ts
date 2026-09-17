@@ -53,7 +53,11 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.error || `Request failed with status ${response.status}`);
+    const error: any = new Error(data.error || `Request failed with status ${response.status}`);
+    error.data = data;
+    error.requiresActivation = data.requiresActivation;
+    error.email = data.email;
+    throw error;
   }
 
   return data as T;
@@ -70,17 +74,50 @@ export const api = {
     return res;
   },
 
-  async register(email: string, password: string, name: string): Promise<{ user: User; token: string }> {
-    const res = await request<{ user: User; token: string }>('/api/auth/register', {
+  async register(
+    email: string,
+    password: string,
+    name: string
+  ): Promise<{ message: string; requiresActivation?: boolean; email?: string; user?: User; token?: string; simulated?: boolean; activationUrl?: string }> {
+    const res = await request<{
+      message: string;
+      requiresActivation?: boolean;
+      email?: string;
+      user?: User;
+      token?: string;
+      simulated?: boolean;
+      activationUrl?: string;
+    }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password, name }),
+    });
+    if (res.token && res.user) {
+      setSession(res.token, res.user);
+    }
+    return res;
+  },
+
+  async activateAccount(token: string): Promise<{ message: string; user: User; token: string }> {
+    const res = await request<{ message: string; user: User; token: string }>('/api/auth/activate', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
     });
     setSession(res.token, res.user);
     return res;
   },
 
+  async resendActivation(email: string): Promise<{ message: string; simulated?: boolean; activationUrl?: string }> {
+    return request<{ message: string; simulated?: boolean; activationUrl?: string }>('/api/auth/resend-activation', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
   async googleAuth(params: {
     credential?: string;
+    accessToken?: string;
+    code?: string;
+    redirectUri?: string;
     email?: string;
     name?: string;
     avatarUrl?: string;

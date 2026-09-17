@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { api, getStoredToken, getStoredUser, clearSession } from './api.ts';
+import { CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { api, getStoredToken, getStoredUser, clearSession, setSession } from './api.ts';
 import { AuthModal } from './components/AuthModal.tsx';
 import { Navbar } from './components/Navbar.tsx';
 import { PipelineBoard } from './components/PipelineBoard.tsx';
@@ -12,6 +13,7 @@ import type { User, Scammer, PipelineStatus, CanonicalStatus } from './types.ts'
 export default function App() {
   const [user, setUser] = useState<User | null>(getStoredUser());
   const [authChecking, setAuthChecking] = useState<boolean>(true);
+  const [activationNotice, setActivationNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // App data
   const [scammers, setScammers] = useState<Scammer[]>([]);
@@ -26,8 +28,79 @@ export default function App() {
   const [flaggedOnly, setFlaggedOnly] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
-  // Verify auth session on mount
+  const isAdmin = user?.role === 'admin' || user?.role === 'admin_scambaiter';
+
+  // Guard: If current view is 'users' but user is not admin, revert to pipeline
   useEffect(() => {
+    if (activeView === 'users' && !isAdmin) {
+      setActiveView('pipeline');
+    }
+  }, [activeView, isAdmin]);
+
+  // Handle URL activation parameters on load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const activateToken = urlParams.get('activateToken') || urlParams.get('token');
+    const isActivated = urlParams.get('activated') === 'true';
+    const activateError = urlParams.get('activateError');
+
+    if (activateError) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setActivationNotice({
+        type: 'error',
+        message: decodeURIComponent(activateError),
+      });
+      setAuthChecking(false);
+      return;
+    }
+
+    if (isActivated && activateToken) {
+      // Returned from GET /api/auth/activate redirect
+      window.history.replaceState({}, document.title, window.location.pathname);
+      localStorage.setItem('scambaiter_crm_token', activateToken);
+      api
+        .getMe()
+        .then((res) => {
+          setSession(activateToken, res.user);
+          setUser(res.user);
+          setActivationNotice({
+            type: 'success',
+            message: 'Your account has been activated successfully! Welcome aboard, Operator.',
+          });
+        })
+        .catch(() => {
+          // fallback
+        })
+        .finally(() => {
+          setAuthChecking(false);
+        });
+      return;
+    }
+
+    if (activateToken && !getStoredToken()) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      api
+        .activateAccount(activateToken)
+        .then((res) => {
+          setUser(res.user);
+          setActivationNotice({
+            type: 'success',
+            message: 'Account successfully activated! Welcome to Scambaiter CRM.',
+          });
+        })
+        .catch((err: any) => {
+          setActivationNotice({
+            type: 'error',
+            message: err.message || 'Activation link is invalid or has expired.',
+          });
+        })
+        .finally(() => {
+          setAuthChecking(false);
+        });
+      return;
+    }
+
+    // Standard session verification on mount
     const token = getStoredToken();
     if (!token) {
       setAuthChecking(false);
@@ -169,6 +242,35 @@ export default function App() {
         onLogout={handleLogout}
       />
 
+      {/* Activation Status Toast */}
+      {activationNotice && (
+        <div className="max-w-[1800px] w-full mx-auto px-3 sm:px-5 lg:px-6 pt-3">
+          <div
+            className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium shadow-lg transition ${
+              activationNotice.type === 'success'
+                ? 'bg-emerald-950/80 border-emerald-800 text-emerald-300'
+                : 'bg-rose-950/80 border-rose-800 text-rose-300'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {activationNotice.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{activationNotice.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActivationNotice(null)}
+              className="text-slate-400 hover:text-white p-1 rounded transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Workspace */}
       <main className="flex-1 max-w-[1800px] w-full mx-auto p-3 sm:p-5 lg:p-6">
         {activeView === 'pipeline' ? (
@@ -220,6 +322,11 @@ export default function App() {
           <AdminUserManagement currentUser={user} />
         )}
       </main>
+
+      {/* Footer Info */}
+      <footer className="border-t border-slate-800/80 px-6 py-4 text-center text-xs text-slate-500">
+        Scambaiter Intelligence CRM is property of cookiebaits &bull; Provided as-is with no warranty or support.
+      </footer>
 
       {/* Quick Add Scammer Modal */}
       <QuickAddScammerModal

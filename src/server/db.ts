@@ -11,6 +11,9 @@ export interface UserRecord {
   avatarUrl?: string | null;
   googleId?: string | null;
   role: string;
+  isActivated?: boolean;
+  activationToken?: string | null;
+  activationExpiresAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   _count?: {
@@ -267,6 +270,11 @@ async function initSupabaseDirectSchema() {
       CREATE INDEX IF NOT EXISTS idx_scammers_user_id ON scammers(user_id);
       CREATE INDEX IF NOT EXISTS idx_scammers_status ON scammers(status);
       CREATE INDEX IF NOT EXISTS idx_call_logs_scammer_id ON call_logs(scammer_id);
+
+      -- Ensure activation columns exist on users table
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_activated BOOLEAN NOT NULL DEFAULT TRUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_expires_at TIMESTAMPTZ;
     `);
     console.log('[DB-POSTGRES] Supabase PostgreSQL database tables validated and ready.');
   } catch (err) {
@@ -284,6 +292,9 @@ function mapUserRow(row: any): UserRecord {
     avatarUrl: row.avatar_url,
     googleId: row.google_id,
     role: row.role,
+    isActivated: row.is_activated !== false,
+    activationToken: row.activation_token || null,
+    activationExpiresAt: row.activation_expires_at ? new Date(row.activation_expires_at) : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
@@ -347,12 +358,21 @@ function mapFraudAccountRow(row: any): FraudAccountRecord {
 
 function matchesWhere(item: any, where?: Record<string, any>): boolean {
   if (!where || Object.keys(where).length === 0) return true;
+
+  if (Array.isArray(where.OR)) {
+    const orMatches = where.OR.some((cond: any) => matchesWhere(item, cond));
+    if (!orMatches) return false;
+  }
+
   for (const [key, expected] of Object.entries(where)) {
+    if (key === 'OR') continue;
     const actual = item[key];
     if (expected !== null && typeof expected === 'object') {
       if (Array.isArray(expected.in)) {
         if (!expected.in.includes(actual)) return false;
       }
+    } else if (typeof expected === 'string' && typeof actual === 'string' && (key === 'email' || key === 'status')) {
+      if (actual.toLowerCase() !== expected.toLowerCase()) return false;
     } else {
       if (actual !== expected) return false;
     }
@@ -380,10 +400,10 @@ export const db = {
 
   user: {
     async findUnique(args: {
-      where: { id?: string; email?: string; googleId?: string };
+      where: { id?: string; email?: string; googleId?: string; activationToken?: string };
       select?: any;
     }): Promise<UserRecord | null> {
-      const { id, email, googleId } = args.where;
+      const { id, email, googleId, activationToken } = args.where;
       if (isPostgresReady && pgPool) {
         try {
           let res;
@@ -393,6 +413,8 @@ export const db = {
             res = await pgPool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [email]);
           } else if (googleId) {
             res = await pgPool.query('SELECT * FROM users WHERE google_id = $1 LIMIT 1', [googleId]);
+          } else if (activationToken) {
+            res = await pgPool.query('SELECT * FROM users WHERE activation_token = $1 LIMIT 1', [activationToken]);
           }
           if (res && res.rows[0]) {
             const mapped = mapUserRow(res.rows[0]);
@@ -412,7 +434,8 @@ export const db = {
         (u) =>
           (id !== undefined && u.id === id) ||
           (email !== undefined && u.email?.toLowerCase() === email?.toLowerCase()) ||
-          (googleId !== undefined && u.googleId === googleId)
+          (googleId !== undefined && u.googleId === googleId) ||
+          (activationToken !== undefined && u.activationToken === activationToken)
       );
       return found ? decorateUser(found) : null;
     },
@@ -420,6 +443,34 @@ export const db = {
     async findFirst(args?: { where?: Record<string, any>; select?: any }): Promise<UserRecord | null> {
       if (isPostgresReady && pgPool && args?.where) {
         try {
+          if (args.where.activationToken) {
+            const res = await pgPool.query('SELECT * FROM users WHERE activation_token = $1 LIMIT 1', [args.where.activationToken]);
+            if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+          }
+          if (args.where.email) {
+            const res = await pgPool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [args.where.email]);
+            if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+          }
+          if (args.where.googleId) {
+            const res = await pgPool.query('SELECT * FROM users WHERE google_id = $1 LIMIT 1', [args.where.googleId]);
+            if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+          }
+          if (Array.isArray(args.where.OR)) {
+            for (const cond of args.where.OR) {
+              if (cond.email) {
+                const res = await pgPool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [cond.email]);
+                if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+              }
+              if (cond.googleId) {
+                const res = await pgPool.query('SELECT * FROM users WHERE google_id = $1 LIMIT 1', [cond.googleId]);
+                if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+              }
+              if (cond.activationToken) {
+                const res = await pgPool.query('SELECT * FROM users WHERE activation_token = $1 LIMIT 1', [cond.activationToken]);
+                if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+              }
+            }
+          }
           if (args.where.role) {
             const res = await pgPool.query('SELECT * FROM users WHERE role = $1 LIMIT 1', [args.where.role]);
             if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
@@ -473,6 +524,9 @@ export const db = {
         avatarUrl: args.data.avatarUrl || null,
         googleId: args.data.googleId || null,
         role: args.data.role || 'scambaiter',
+        isActivated: args.data.isActivated !== undefined ? args.data.isActivated : true,
+        activationToken: args.data.activationToken || null,
+        activationExpiresAt: args.data.activationExpiresAt || null,
         createdAt: args.data.createdAt || now,
         updatedAt: args.data.updatedAt || now,
       };
@@ -480,16 +534,32 @@ export const db = {
       if (isPostgresReady && pgPool) {
         try {
           await pgPool.query(
-            `INSERT INTO users (id, email, password, name, avatar_url, google_id, role, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `INSERT INTO users (id, email, password, name, avatar_url, google_id, role, is_activated, activation_token, activation_expires_at, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
              ON CONFLICT (id) DO UPDATE SET
                email = EXCLUDED.email,
                name = EXCLUDED.name,
                password = EXCLUDED.password,
                avatar_url = EXCLUDED.avatar_url,
                role = EXCLUDED.role,
+               is_activated = EXCLUDED.is_activated,
+               activation_token = EXCLUDED.activation_token,
+               activation_expires_at = EXCLUDED.activation_expires_at,
                updated_at = NOW()`,
-            [user.id, user.email, user.password, user.name, user.avatarUrl, user.googleId, user.role, user.createdAt, user.updatedAt]
+            [
+              user.id,
+              user.email,
+              user.password,
+              user.name,
+              user.avatarUrl,
+              user.googleId,
+              user.role,
+              user.isActivated,
+              user.activationToken,
+              user.activationExpiresAt,
+              user.createdAt,
+              user.updatedAt
+            ]
           );
         } catch (err) {
           console.warn('[DB-POSTGRES] create user warning:', err);
@@ -514,7 +584,7 @@ export const db = {
       );
       const current = idx >= 0 ? state.users[idx] : null;
       const updated: UserRecord = {
-        ...(current || { id: args.where.id || crypto.randomUUID(), email: args.where.email || '', name: 'Admin', role: 'admin', createdAt: new Date() }),
+        ...(current || { id: args.where.id || crypto.randomUUID(), email: args.where.email || '', name: 'Admin', role: 'admin', isActivated: true, createdAt: new Date() }),
         ...args.data,
         updatedAt: new Date(),
       };
@@ -529,9 +599,22 @@ export const db = {
                  password = COALESCE($3, password),
                  role = COALESCE($4, role),
                  avatar_url = COALESCE($5, avatar_url),
+                 is_activated = COALESCE($6, is_activated),
+                 activation_token = $7,
+                 activation_expires_at = $8,
                  updated_at = NOW()
-               WHERE id = $6`,
-              [updated.email, updated.name, updated.password, updated.role, updated.avatarUrl, args.where.id]
+               WHERE id = $9`,
+              [
+                updated.email,
+                updated.name,
+                updated.password,
+                updated.role,
+                updated.avatarUrl,
+                updated.isActivated,
+                updated.activationToken ?? null,
+                updated.activationExpiresAt ?? null,
+                args.where.id
+              ]
             );
           } else if (args.where.email) {
             await pgPool.query(
@@ -540,9 +623,21 @@ export const db = {
                  password = COALESCE($2, password),
                  role = COALESCE($3, role),
                  avatar_url = COALESCE($4, avatar_url),
+                 is_activated = COALESCE($5, is_activated),
+                 activation_token = $6,
+                 activation_expires_at = $7,
                  updated_at = NOW()
-               WHERE LOWER(email) = LOWER($5)`,
-              [updated.name, updated.password, updated.role, updated.avatarUrl, args.where.email]
+               WHERE LOWER(email) = LOWER($8)`,
+              [
+                updated.name,
+                updated.password,
+                updated.role,
+                updated.avatarUrl,
+                updated.isActivated,
+                updated.activationToken ?? null,
+                updated.activationExpiresAt ?? null,
+                args.where.email
+              ]
             );
           }
         } catch (err) {

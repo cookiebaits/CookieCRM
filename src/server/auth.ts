@@ -60,28 +60,44 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
   }
 
   // Check if this user matches the configured ADMIN_USER env (default sbadmin@cookiebaits)
-  const adminEnvUser = (process.env.ADMIN_USER || 'sbadmin@cookiebaits').toLowerCase().trim();
-  if (adminEnvUser && dbUser.email.toLowerCase().trim() === adminEnvUser && dbUser.role !== 'admin') {
+  const adminEnvUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
+    ? process.env.ADMIN_USER.toLowerCase().trim()
+    : 'sbadmin@cookiebaits';
+
+  const isAuthorizedAdmin =
+    (adminEnvUser && dbUser.email.toLowerCase().trim() === adminEnvUser) ||
+    dbUser.email.toLowerCase().trim() === 'cookiescambait@gmail.com';
+
+  if (isAuthorizedAdmin) {
     dbUser.role = 'admin';
+    await db.user.update({ where: { id: dbUser.id }, data: { role: 'admin' } }).catch(() => {});
+  } else if (!isAuthorizedAdmin && (dbUser as any).googleId && dbUser.role === 'admin') {
+    dbUser.role = 'scambaiter';
   }
 
   req.user = dbUser;
   next();
 }
 
-export function isAdminUser(user: AuthUser | { email?: string; role?: string } | null | undefined): boolean {
+export function isAdminUser(user: AuthUser | { email?: string; role?: string; googleId?: string | null } | null | undefined): boolean {
   if (!user) return false;
   const userEmail = user.email?.toLowerCase().trim();
-  const adminEnvUser = (process.env.ADMIN_USER || 'sbadmin@cookiebaits').toLowerCase().trim();
-  if (userEmail && (userEmail === adminEnvUser || userEmail === 'sbadmin@cookiebaits' || userEmail === 'cookiescambait@gmail.com')) {
+  const adminEnvUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
+    ? process.env.ADMIN_USER.toLowerCase().trim()
+    : 'sbadmin@cookiebaits';
+
+  // Strict check: if user email matches configured Dokploy ADMIN_USER env or the applet owner
+  if (userEmail && (userEmail === adminEnvUser || userEmail === 'cookiescambait@gmail.com')) {
     return true;
   }
+
+  // Google OAuth / Gmail users can NEVER be admin unless their email matches ADMIN_USER in Dokploy or the owner
+  if ((user as any).googleId && userEmail !== adminEnvUser && userEmail !== 'cookiescambait@gmail.com') {
+    return false;
+  }
+
   const role = (user.role || '').toLowerCase();
-  return (
-    role === 'admin' ||
-    role === 'admin_scambaiter' ||
-    role.includes('admin')
-  );
+  return role === 'admin' || role === 'admin_scambaiter';
 }
 
 export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {

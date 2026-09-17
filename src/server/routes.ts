@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { db, getDirectPostgresUrl } from './db.ts';
 import {
   hashPassword,
@@ -11,6 +12,14 @@ import {
   type AuthenticatedRequest,
 } from './auth.ts';
 import { lookupPhoneProvider, assistWithNotes } from './gemini.ts';
+import { sendActivationEmail } from './email.ts';
+import {
+  getGoogleClientId,
+  getGoogleClientSecret,
+  verifyGoogleIdToken,
+  verifyGoogleAccessToken,
+  exchangeGoogleCode,
+} from './google.ts';
 
 export const apiRouter = Router();
 
@@ -27,7 +36,8 @@ apiRouter.get('/health', (_req, res) => {
 });
 
 apiRouter.get('/config', (_req, res) => {
-  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+  const googleClientId = getGoogleClientId();
+  const hasGoogleSecret = Boolean(getGoogleClientSecret());
   const adminUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
     ? process.env.ADMIN_USER.toLowerCase().trim()
     : 'sbadmin@cookiebaits';
@@ -47,6 +57,7 @@ apiRouter.get('/config', (_req, res) => {
   res.json({
     googleClientId,
     googleOAuthEnabled: Boolean(googleClientId && !googleClientId.includes('sample-google-client-id')),
+    hasGoogleSecret,
     adminUser,
     dbSource,
     directConnectionConfigured: Boolean(directUrl),
@@ -123,11 +134,23 @@ apiRouter.post('/auth/register', async (req, res) => {
     });
 
     if (existingUser) {
+      // If user exists and is not activated, prompt to activate or resend
+      if (existingUser.isActivated === false) {
+        return res.status(409).json({
+          error: 'An account with this email already exists but is not yet activated. Please check your email or click "Resend Activation".',
+          requiresActivation: true,
+          email: normalizedEmail,
+        });
+      }
       return res.status(409).json({ error: 'An account with this email already exists.' });
     }
 
     const adminEnvUser = process.env.ADMIN_USER?.toLowerCase().trim();
     const assignedRole = adminEnvUser && normalizedEmail === adminEnvUser ? 'admin' : 'scambaiter';
+
+    // Generate secure 64-character activation token
+    const activationToken = crypto.randomBytes(32).toString('hex');
+    const activationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const hashedPassword = await hashPassword(password);
     const user = await db.user.create({
@@ -136,15 +159,188 @@ apiRouter.post('/auth/register', async (req, res) => {
         password: hashedPassword,
         name: name.trim(),
         role: assignedRole,
+        isActivated: false,
+        activationToken,
+        activationExpiresAt,
       },
-      select: { id: true, email: true, name: true, avatarUrl: true, role: true },
+      select: { id: true, email: true, name: true, avatarUrl: true, role: true, isActivated: true },
     });
 
-    const token = generateToken(user);
-    return res.status(201).json({ user, token });
+    // Send activation email out via Resend API
+    const emailResult = await sendActivationEmail({
+      to: normalizedEmail,
+      name: name.trim(),
+      token: activationToken,
+      req,
+    });
+
+    return res.status(201).json({
+      message: 'Account created! Please check your email for the activation link before logging in.',
+      requiresActivation: true,
+      email: normalizedEmail,
+      simulated: emailResult.simulated,
+      activationUrl: emailResult.simulated ? emailResult.activationUrl : undefined,
+    });
   } catch (error) {
     console.error('Register error:', error);
     return res.status(500).json({ error: 'Failed to create user account.' });
+  }
+});
+
+// Activate Account via Token (POST API)
+apiRouter.post('/auth/activate', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Activation token is required.' });
+    }
+
+    const trimmedToken = token.trim();
+    const user = await db.user.findFirst({
+      where: { activationToken: trimmedToken },
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or already used activation token. If you already activated your account, you can log in.' });
+    }
+
+    if (user.activationExpiresAt && new Date(user.activationExpiresAt).getTime() < Date.now()) {
+      return res.status(400).json({
+        error: 'Activation token has expired (valid for 24 hours). Please request a new activation link.',
+        expired: true,
+        email: user.email,
+      });
+    }
+
+    const updatedUser = await db.user.update({
+      where: { id: user.id },
+      data: {
+        isActivated: true,
+        activationToken: null,
+        activationExpiresAt: null,
+      },
+    });
+
+    const isUserAdmin = isAdminUser(updatedUser);
+    const authUser = {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      avatarUrl: updatedUser.avatarUrl,
+      role: isUserAdmin ? 'admin' : updatedUser.role,
+    };
+
+    const authToken = generateToken(authUser);
+    console.log(`[AUTH] User activated successfully: ${updatedUser.email}`);
+
+    return res.json({
+      message: 'Account successfully activated! Welcome to Scambaiter CRM.',
+      user: authUser,
+      token: authToken,
+    });
+  } catch (error) {
+    console.error('Activation error:', error);
+    return res.status(500).json({ error: 'Failed to activate account.' });
+  }
+});
+
+// Activate Account via Direct URL (GET Browser Redirect)
+apiRouter.get('/auth/activate', async (req, res) => {
+  try {
+    const token = (req.query.token as string)?.trim();
+    if (!token) {
+      return res.redirect('/?activateError=' + encodeURIComponent('Missing activation token.'));
+    }
+
+    const user = await db.user.findFirst({
+      where: { activationToken: token },
+    });
+
+    if (!user) {
+      return res.redirect('/?activateError=' + encodeURIComponent('Invalid or already used activation link.'));
+    }
+
+    if (user.activationExpiresAt && new Date(user.activationExpiresAt).getTime() < Date.now()) {
+      return res.redirect('/?activateError=' + encodeURIComponent('Activation link has expired. Please request a new one.') + '&email=' + encodeURIComponent(user.email));
+    }
+
+    const updatedUser = await db.user.update({
+      where: { id: user.id },
+      data: {
+        isActivated: true,
+        activationToken: null,
+        activationExpiresAt: null,
+      },
+    });
+
+    const isUserAdmin = isAdminUser(updatedUser);
+    const authUser = {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      avatarUrl: updatedUser.avatarUrl,
+      role: isUserAdmin ? 'admin' : updatedUser.role,
+    };
+
+    const authToken = generateToken(authUser);
+    return res.redirect(`/?activated=true&token=${encodeURIComponent(authToken)}&name=${encodeURIComponent(authUser.name)}`);
+  } catch (error) {
+    console.error('Activation GET error:', error);
+    return res.redirect('/?activateError=' + encodeURIComponent('Server error during activation.'));
+  }
+});
+
+// Resend Activation Email
+apiRouter.post('/auth/resend-activation', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email address is required.' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await db.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      // Don't reveal if account exists
+      return res.json({ message: 'If an account exists with this email address, an activation link has been sent.' });
+    }
+
+    if (user.isActivated !== false) {
+      return res.status(400).json({
+        error: 'This account is already activated. You can proceed directly to log in.',
+        alreadyActivated: true,
+      });
+    }
+
+    const newActivationToken = crypto.randomBytes(32).toString('hex');
+    const newActivationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        activationToken: newActivationToken,
+        activationExpiresAt: newActivationExpiresAt,
+      },
+    });
+
+    const emailResult = await sendActivationEmail({
+      to: normalizedEmail,
+      name: user.name,
+      token: newActivationToken,
+      req,
+    });
+
+    return res.json({
+      message: 'A new activation email has been sent. Please check your inbox.',
+      simulated: emailResult.simulated,
+      activationUrl: emailResult.simulated ? emailResult.activationUrl : undefined,
+    });
+  } catch (error) {
+    console.error('Resend activation error:', error);
+    return res.status(500).json({ error: 'Failed to resend activation email.' });
   }
 });
 
@@ -180,12 +376,13 @@ apiRouter.post('/auth/login', async (req, res) => {
             name: 'SB Admin',
             password: hashedPassword,
             role: 'admin',
+            isActivated: true,
           },
         });
-      } else if (adminDbUser.role !== 'admin') {
+      } else if (adminDbUser.role !== 'admin' || adminDbUser.isActivated === false) {
         adminDbUser = await db.user.update({
           where: { id: adminDbUser.id },
-          data: { role: 'admin' },
+          data: { role: 'admin', isActivated: true },
         });
       }
 
@@ -214,6 +411,15 @@ apiRouter.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
+    // Check account activation requirement (bypassed only for verified Google logins and Dokploy admin)
+    if (user.isActivated === false) {
+      return res.status(403).json({
+        error: 'Your account is not activated yet. Please check your email for the activation link or request a new one.',
+        requiresActivation: true,
+        email: user.email,
+      });
+    }
+
     const isUserAdmin = isAdminUser(user);
     const authUser = {
       id: user.id,
@@ -234,21 +440,43 @@ apiRouter.post('/auth/login', async (req, res) => {
 // Google Sign-In with Gmail
 apiRouter.post('/auth/google', async (req, res) => {
   try {
-    const { credential, email, name, avatarUrl, googleId } = req.body;
+    const { credential, accessToken, code, redirectUri, email, name, avatarUrl, googleId } = req.body;
 
     let targetEmail = email;
     let targetName = name || 'Scambaiter Agent';
     let targetAvatar = avatarUrl;
     let targetGoogleId = googleId;
 
-    // If a Google Identity Services credential token is sent
-    if (credential) {
-      const decoded = parseJwtPayload(credential);
-      if (decoded && decoded.email) {
-        targetEmail = decoded.email;
-        targetName = decoded.name || targetName;
-        targetAvatar = decoded.picture || targetAvatar;
-        targetGoogleId = decoded.sub;
+    // 1. If an authorization code was provided, securely exchange it using client_secret on server
+    if (code) {
+      const verified = await exchangeGoogleCode(code, redirectUri);
+      if (verified) {
+        targetEmail = verified.email;
+        targetName = verified.name || targetName;
+        targetAvatar = verified.avatarUrl || targetAvatar;
+        targetGoogleId = verified.googleId || targetGoogleId;
+      }
+    }
+
+    // 2. If a Google OAuth access token was sent (from GIS initTokenClient)
+    if (accessToken && !targetEmail) {
+      const verified = await verifyGoogleAccessToken(accessToken);
+      if (verified) {
+        targetEmail = verified.email;
+        targetName = verified.name || targetName;
+        targetAvatar = verified.avatarUrl || targetAvatar;
+        targetGoogleId = verified.googleId || targetGoogleId;
+      }
+    }
+
+    // 3. If a Google Identity Services credential token (ID token JWT) is sent
+    if (credential && !targetEmail) {
+      const verified = await verifyGoogleIdToken(credential);
+      if (verified) {
+        targetEmail = verified.email;
+        targetName = verified.name || targetName;
+        targetAvatar = verified.avatarUrl || targetAvatar;
+        targetGoogleId = verified.googleId || targetGoogleId;
       }
     }
 
@@ -268,14 +496,16 @@ apiRouter.post('/auth/google', async (req, res) => {
       },
     });
 
-    const adminEnvUser = (process.env.ADMIN_USER || 'sbadmin@cookiebaits').toLowerCase().trim();
-    const shouldBeAdmin =
-      normalizedEmail === adminEnvUser ||
-      normalizedEmail === 'sbadmin@cookiebaits' ||
-      normalizedEmail === 'cookiescambait@gmail.com';
+    // Strictly follow Dokploy ADMIN_USER setting (default sbadmin@cookiebaits if not set)
+    const adminEnvUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
+      ? process.env.ADMIN_USER.toLowerCase().trim()
+      : 'sbadmin@cookiebaits';
+
+    // A user logging in via Google is admin if their email matches ADMIN_USER or the workspace owner
+    const shouldBeAdmin = normalizedEmail === adminEnvUser || normalizedEmail === 'cookiescambait@gmail.com';
 
     if (!user) {
-      // Create new user linked with Google / Gmail
+      // Create new user linked with Google / Gmail (automatically activated - bypasses email verification)
       user = await db.user.create({
         data: {
           email: normalizedEmail,
@@ -283,11 +513,14 @@ apiRouter.post('/auth/google', async (req, res) => {
           avatarUrl: targetAvatar,
           googleId: targetGoogleId || `google_${Date.now()}`,
           role: shouldBeAdmin ? 'admin' : 'scambaiter',
+          isActivated: true,
+          activationToken: null,
+          activationExpiresAt: null,
         },
       });
     } else {
-      // Update existing user with Google info if missing
-      const nextRole = shouldBeAdmin ? 'admin' : user.role;
+      // Update existing user with Google info
+      const nextRole = shouldBeAdmin ? 'admin' : (user.role === 'admin' ? 'scambaiter' : user.role);
       user = await db.user.update({
         where: { id: user.id },
         data: {
@@ -295,6 +528,9 @@ apiRouter.post('/auth/google', async (req, res) => {
           avatarUrl: targetAvatar || user.avatarUrl,
           name: targetName || user.name,
           role: nextRole,
+          isActivated: true,
+          activationToken: null,
+          activationExpiresAt: null,
         },
       });
     }
@@ -308,6 +544,7 @@ apiRouter.post('/auth/google', async (req, res) => {
     };
 
     const token = generateToken(authUser);
+    console.log(`[AUTH] Google sign-in success for ${authUser.email} (role: ${authUser.role})`);
     return res.json({ user: authUser, token });
   } catch (error) {
     console.error('Google Auth error:', error);

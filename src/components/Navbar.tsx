@@ -5,6 +5,7 @@ import {
   Plus,
   BarChart3,
   Kanban,
+  LayoutDashboard,
   LogOut,
   User as UserIcon,
   ShieldAlert,
@@ -38,33 +39,25 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
 }) => {
   const isGmail = user.email.toLowerCase().endsWith('@gmail.com');
-  const isAdmin =
-    user.role === 'admin' ||
-    user.role === 'admin_scambaiter' ||
-    user.email.toLowerCase() === 'cookiescambait@gmail.com' ||
-    user.email.toLowerCase() === 'sbadmin@cookiebaits';
+  const isAdmin = user.role === 'admin' || user.role === 'admin_scambaiter';
 
   return (
     <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur border-b border-slate-800/80 px-4 sm:px-6 py-3">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
         {/* Left: Brand & Navigation */}
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-950/40">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="font-extrabold text-sm sm:text-base text-white tracking-tight flex items-center gap-1.5">
-                Scambaiter CRM
-                <span className="text-[10px] px-2 py-0.2 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                  v2.0
-                </span>
-              </span>
-              <p className="text-[10px] text-slate-400 hidden sm:block">
-                Operations & Fraud Case Tracker
-              </p>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => onChangeView('pipeline')}
+            className="flex items-center hover:opacity-95 transition focus:outline-none cursor-pointer"
+            title="Scambaiter CRM Intelligence"
+          >
+            <img
+              src="/logo.png"
+              alt="Scambaiter CRM Intelligence"
+              className="h-9 sm:h-10 w-auto object-contain"
+            />
+          </button>
 
           {/* View Toggle Tabs */}
           <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
@@ -78,8 +71,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Kanban className="w-3.5 h-3.5" />
-              <span>Active Baits</span>
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Dashboard</span>
             </button>
 
             <button
