@@ -12,6 +12,14 @@ const __dirname = path.dirname(__filename);
 const PORT = 3000;
 const app = express();
 
+// Trust reverse proxies (Traefik & Cloudflare Edge)
+app.set('trust proxy', true);
+
+// Direct root healthcheck for Docker / Traefik / Dokploy health monitors
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
 // Use backend API
 app.use(backendApp);
 

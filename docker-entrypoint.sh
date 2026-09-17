@@ -2,13 +2,15 @@
 set -e
 
 echo "=== [Scambaiter CRM Deployment Entrypoint] ==="
-echo "Running automated Prisma database migrations..."
+echo "Ensuring persistent storage directory exists..."
+mkdir -p /app/data
+chmod 777 /app/data 2>/dev/null || true
 
-# Automated database schema sync / migration
-npx prisma db push --skip-generate
+if [ -n "$DATABASE_URL" ] || [ -n "$DIRECT_URL" ]; then
+  echo "Supabase Direct PostgreSQL connection detected."
+elif [ -n "$DB" ] || [ -n "$SUPABASE_URL" ]; then
+  echo "Supabase Database: ${DB:-$SUPABASE_URL}..."
+fi
 
-echo "Database sync complete. Checking database permissions..."
-
-# Start the full-stack server
-echo "Starting Scambaiter CRM on port 3000..."
+echo "Starting Scambaiter CRM on port ${PORT:-3000} behind Traefik / Cloudflare..."
 exec "$@"

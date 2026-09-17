@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma } from './db.ts';
+import { prisma, db, getDirectPostgresUrl } from './db.ts';
 import {
   hashPassword,
   comparePassword,
@@ -31,14 +31,27 @@ apiRouter.get('/config', (_req, res) => {
   const adminUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
     ? process.env.ADMIN_USER.toLowerCase().trim()
     : 'sbadmin@cookiebaits';
-  const testerUser = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
+
+  const directUrl = getDirectPostgresUrl();
+  const directConnected = db.isDirectPostgresConnected();
+
+  let dbSource = 'Persistent Storage';
+  if (directConnected) {
+    dbSource = 'Supabase Direct Connection (PostgreSQL Active)';
+  } else if (directUrl) {
+    dbSource = 'Supabase Direct Connection (Configured)';
+  } else if (process.env.DB?.startsWith('http') || process.env.SUPABASE_URL) {
+    dbSource = `Supabase Project (${process.env.DB || process.env.SUPABASE_URL})`;
+  }
 
   res.json({
     googleClientId,
     googleOAuthEnabled: Boolean(googleClientId && !googleClientId.includes('sample-google-client-id')),
     adminUser,
-    testerUser,
-    dbSource: process.env.DB ? 'Dokploy Custom DB (DB=...)' : 'Default SQLite (prisma/scambaiter.db)',
+    dbSource,
+    directConnectionConfigured: Boolean(directUrl),
+    directConnectionActive: directConnected,
+    supabaseConfigured: Boolean(directUrl || process.env.DB || process.env.SUPABASE_URL),
     appUrl: process.env.APP_URL || '',
   });
 });
@@ -149,14 +162,10 @@ apiRouter.post('/auth/login', async (req, res) => {
       : 'sbadmin@cookiebaits';
     const adminEnvPass = process.env.ADMIN_PASS?.trim() || 'sbAdmin2026!#';
 
-    const testerEnvUser = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
-    const testerEnvPass = process.env.TESTER_PASS?.trim() || 'scambaiter123';
-
     // Fast-path 1: Check if credentials match ADMIN_USER & ADMIN_PASS from Dokploy environment, or sbadmin@cookiebaits
     const isAdminFastMatch =
       (normalizedEmail === adminEnvUser && (password === adminEnvPass || password === 'sbAdmin2026!#')) ||
-      (normalizedEmail === 'sbadmin@cookiebaits' && (password === adminEnvPass || password === 'sbAdmin2026!#')) ||
-      (normalizedEmail === 'tester@cookiebaits' && (password === adminEnvPass || password === 'sbAdmin2026!#'));
+      (normalizedEmail === 'sbadmin@cookiebaits' && (password === adminEnvPass || password === 'sbAdmin2026!#'));
 
     if (isAdminFastMatch) {
       let adminDbUser = await prisma.user.findUnique({
@@ -186,37 +195,6 @@ apiRouter.post('/auth/login', async (req, res) => {
         name: adminDbUser.name,
         avatarUrl: adminDbUser.avatarUrl,
         role: 'admin',
-      };
-
-      const token = generateToken(authUser);
-      return res.json({ user: authUser, token });
-    }
-
-    // Fast-path 2: Check if credentials match TESTER_USER & TESTER_PASS from Dokploy environment
-    if (normalizedEmail === testerEnvUser && password === testerEnvPass) {
-      let testerDbUser = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-      });
-
-      if (!testerDbUser) {
-        const hashedPassword = await hashPassword(password);
-        testerDbUser = await prisma.user.create({
-          data: {
-            email: normalizedEmail,
-            name: 'Cookie Scambaiter',
-            password: hashedPassword,
-            role: 'admin_scambaiter',
-          },
-        });
-      }
-
-      const isUserAdmin = isAdminUser(testerDbUser);
-      const authUser = {
-        id: testerDbUser.id,
-        email: testerDbUser.email,
-        name: testerDbUser.name,
-        avatarUrl: testerDbUser.avatarUrl,
-        role: isUserAdmin ? 'admin' : testerDbUser.role,
       };
 
       const token = generateToken(authUser);
@@ -291,11 +269,9 @@ apiRouter.post('/auth/google', async (req, res) => {
     });
 
     const adminEnvUser = (process.env.ADMIN_USER || 'sbadmin@cookiebaits').toLowerCase().trim();
-    const testerEnvUser = (process.env.TESTER_USER || 'cookiescambait@gmail.com').toLowerCase().trim();
     const shouldBeAdmin =
       normalizedEmail === adminEnvUser ||
       normalizedEmail === 'sbadmin@cookiebaits' ||
-      normalizedEmail === testerEnvUser ||
       normalizedEmail === 'cookiescambait@gmail.com';
 
     if (!user) {
