@@ -2,23 +2,43 @@ import path from 'path';
 import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
 
+function isLikelySqliteInput(input?: string): boolean {
+  if (!input || typeof input !== 'string') return false;
+  const trimmed = input.trim().replace(/^['"]|['"]$/g, '');
+  if (!trimmed) return false;
+  // Exclude remote URLs
+  if (/^(https?|postgres(ql)?|mysql):\/\//i.test(trimmed)) return false;
+  // Exclude random hex/token strings without slashes or file extension
+  if (/^[a-f0-9]{32,128}$/i.test(trimmed) && !trimmed.includes('/') && !trimmed.includes('.')) return false;
+  return true;
+}
+
 // Determine the SQLite database file path
 // Dokploy environment settings can specify DB="file:..." or DB="/path/to/users.db" or DATABASE_URL
 const defaultDbPath = path.resolve(process.cwd(), 'prisma/scambaiter.db');
 
-const rawDb = process.env.DB?.trim() || process.env.DATABASE_URL?.trim();
+const candidateDb = process.env.DB?.trim();
+const candidateUrl = process.env.DATABASE_URL?.trim();
+
+let chosenDb: string | undefined;
+if (isLikelySqliteInput(candidateDb)) {
+  chosenDb = candidateDb;
+} else if (isLikelySqliteInput(candidateUrl)) {
+  chosenDb = candidateUrl;
+}
 
 let dbUrl: string;
 
-if (!rawDb) {
+if (!chosenDb) {
   dbUrl = `file:${defaultDbPath}`;
-} else if (rawDb.startsWith('file:')) {
-  const filePath = rawDb.replace(/^file:/, '');
+} else if (chosenDb.startsWith('file:')) {
+  const filePath = chosenDb.replace(/^file:/, '').split('?')[0];
   const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
   dbUrl = `file:${resolved}`;
 } else {
   // Plain file path provided in Dokploy (e.g., /app/data/scambaiter.db or ./prisma/scambaiter.db)
-  const resolved = path.isAbsolute(rawDb) ? rawDb : path.resolve(process.cwd(), rawDb);
+  const cleanPath = chosenDb.split('?')[0];
+  const resolved = path.isAbsolute(cleanPath) ? cleanPath : path.resolve(process.cwd(), cleanPath);
   dbUrl = `file:${resolved}`;
 }
 

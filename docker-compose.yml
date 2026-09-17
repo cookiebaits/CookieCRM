@@ -12,25 +12,48 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=file:/app/prisma/scambaiter.db
+      - DB=${DB:-file:/app/prisma/scambaiter.db}
+      - DATABASE_URL=${DATABASE_URL:-file:/app/prisma/scambaiter.db}
+      - ADMIN_USER=${ADMIN_USER:-sbadmin@cookiebaits}
+      - ADMIN_PASS=${ADMIN_PASS:-sbAdmin2026!#}
       - JWT_SECRET=${JWT_SECRET:-super-secret-dokploy-scambaiter-key-2026}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - APP_URL=${APP_URL:-https://your-domain.com}
     volumes:
-      # Persistent volume for Dokploy Cloudflare S3 backup
+      # Persistent volume for Dokploy SQLite & Cloudflare S3/R2 backup
       - scambaiter_db_data:/app/prisma
+    networks:
+      - dokploy-network
+      - default
     labels:
-      # Traefik configuration for Dokploy
+      # Enable Traefik for Dokploy
       - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      # HTTP entrypoint (Cloudflare Flexible SSL or web proxying)
+      - "traefik.http.routers.scambaiter-http.rule=Host(`${DOMAIN:-scambaiter.yourdomain.com}`)"
+      - "traefik.http.routers.scambaiter-http.entrypoints=web"
+      - "traefik.http.routers.scambaiter-http.service=scambaiter"
+      # HTTPS entrypoint (Cloudflare Full / Strict SSL)
       - "traefik.http.routers.scambaiter.rule=Host(`${DOMAIN:-scambaiter.yourdomain.com}`)"
       - "traefik.http.routers.scambaiter.entrypoints=websecure"
+      - "traefik.http.routers.scambaiter.tls=true"
       - "traefik.http.routers.scambaiter.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.scambaiter.service=scambaiter"
+      # Internal service port
       - "traefik.http.services.scambaiter.loadbalancer.server.port=3000"
-      # Cloudflare real IP & secure headers
+      # Cloudflare real IP & HTTPS protocol forward headers
       - "traefik.http.middlewares.cloudflare-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.cloudflare-headers.headers.sslredirect=false"
       - "traefik.http.routers.scambaiter.middlewares=cloudflare-headers"
+      - "traefik.http.routers.scambaiter-http.middlewares=cloudflare-headers"
 
 volumes:
   scambaiter_db_data:
     name: scambaiter_db_data
+
+networks:
+  dokploy-network:
+    name: dokploy-network
+    external: true
+

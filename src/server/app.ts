@@ -7,8 +7,8 @@ export const backendApp = express();
 backendApp.use(express.json({ limit: '25mb' }));
 backendApp.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// Trust reverse proxies (Traefik / Cloudflare)
-backendApp.set('trust proxy', 1);
+// Trust multi-hop reverse proxies (Traefik & Cloudflare Edge)
+backendApp.set('trust proxy', true);
 
 // Mount API router
 backendApp.use('/api', apiRouter);
