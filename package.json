@@ -9,7 +9,11 @@
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prisma": "node ./bin/prisma.cjs"
+  },
+  "bin": {
+    "prisma": "./bin/prisma.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

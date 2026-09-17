@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { prisma } from './db.ts';
+import { db } from './db.ts';
 import type { Request, Response, NextFunction } from 'express';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'scambaiter-super-secret-key-2026';
@@ -50,7 +50,7 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     return res.status(401).json({ error: 'Invalid or expired session. Please log in again.' });
   }
 
-  const dbUser = await prisma.user.findUnique({
+  const dbUser = await db.user.findUnique({
     where: { id: payload.id },
     select: { id: true, email: true, name: true, avatarUrl: true, role: true },
   });

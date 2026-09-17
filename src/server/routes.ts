@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma, db, getDirectPostgresUrl } from './db.ts';
+import { db, getDirectPostgresUrl } from './db.ts';
 import {
   hashPassword,
   comparePassword,
@@ -118,7 +118,7 @@ apiRouter.post('/auth/register', async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const existingUser = await prisma.user.findUnique({
+    const existingUser = await db.user.findUnique({
       where: { email: normalizedEmail },
     });
 
@@ -130,7 +130,7 @@ apiRouter.post('/auth/register', async (req, res) => {
     const assignedRole = adminEnvUser && normalizedEmail === adminEnvUser ? 'admin' : 'scambaiter';
 
     const hashedPassword = await hashPassword(password);
-    const user = await prisma.user.create({
+    const user = await db.user.create({
       data: {
         email: normalizedEmail,
         password: hashedPassword,
@@ -168,13 +168,13 @@ apiRouter.post('/auth/login', async (req, res) => {
       (normalizedEmail === 'sbadmin@cookiebaits' && (password === adminEnvPass || password === 'sbAdmin2026!#'));
 
     if (isAdminFastMatch) {
-      let adminDbUser = await prisma.user.findUnique({
+      let adminDbUser = await db.user.findUnique({
         where: { email: normalizedEmail },
       });
 
       if (!adminDbUser) {
         const hashedPassword = await hashPassword(password);
-        adminDbUser = await prisma.user.create({
+        adminDbUser = await db.user.create({
           data: {
             email: normalizedEmail,
             name: 'SB Admin',
@@ -183,7 +183,7 @@ apiRouter.post('/auth/login', async (req, res) => {
           },
         });
       } else if (adminDbUser.role !== 'admin') {
-        adminDbUser = await prisma.user.update({
+        adminDbUser = await db.user.update({
           where: { id: adminDbUser.id },
           data: { role: 'admin' },
         });
@@ -201,7 +201,7 @@ apiRouter.post('/auth/login', async (req, res) => {
       return res.json({ user: authUser, token });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await db.user.findUnique({
       where: { email: normalizedEmail },
     });
 
@@ -259,7 +259,7 @@ apiRouter.post('/auth/google', async (req, res) => {
     const normalizedEmail = targetEmail.toLowerCase().trim();
 
     // Check if user exists by email or googleId
-    let user = await prisma.user.findFirst({
+    let user = await db.user.findFirst({
       where: {
         OR: [
           { email: normalizedEmail },
@@ -276,7 +276,7 @@ apiRouter.post('/auth/google', async (req, res) => {
 
     if (!user) {
       // Create new user linked with Google / Gmail
-      user = await prisma.user.create({
+      user = await db.user.create({
         data: {
           email: normalizedEmail,
           name: targetName,
@@ -288,7 +288,7 @@ apiRouter.post('/auth/google', async (req, res) => {
     } else {
       // Update existing user with Google info if missing
       const nextRole = shouldBeAdmin ? 'admin' : user.role;
-      user = await prisma.user.update({
+      user = await db.user.update({
         where: { id: user.id },
         data: {
           googleId: targetGoogleId || user.googleId,
@@ -327,7 +327,7 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res) => {
 // Get all scammers with calls and fraud accounts
 apiRouter.get('/scammers', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const scammers = await prisma.scammer.findMany({
+    const scammers = await db.scammer.findMany({
       include: {
         calls: {
           orderBy: { date: 'desc' },
@@ -392,7 +392,7 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
       return res.status(400).json({ error: 'Full Name and Phone Number are required.' });
     }
 
-    const scammer = await prisma.scammer.create({
+    const scammer = await db.scammer.create({
       data: {
         fullName: fullName.trim(),
         alias: alias ? alias.trim() : null,
@@ -442,7 +442,7 @@ apiRouter.post('/scammers/bulk-import', requireAuth, async (req: AuthenticatedRe
       }
 
       try {
-        const created = await prisma.scammer.create({
+        const created = await db.scammer.create({
           data: {
             fullName: String(item.fullName).trim(),
             alias: item.alias ? String(item.alias).trim() : null,
@@ -509,7 +509,7 @@ apiRouter.put('/scammers/:id', requireAuth, async (req, res) => {
       priority,
     } = req.body;
 
-    const updated = await prisma.scammer.update({
+    const updated = await db.scammer.update({
       where: { id },
       data: {
         ...(fullName !== undefined && { fullName }),
@@ -552,7 +552,7 @@ apiRouter.put('/scammers/:id', requireAuth, async (req, res) => {
 apiRouter.delete('/scammers/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.scammer.delete({ where: { id } });
+    await db.scammer.delete({ where: { id } });
     return res.json({ success: true, message: 'Scammer deleted successfully.' });
   } catch (error) {
     console.error('Delete scammer error:', error);
@@ -581,7 +581,7 @@ apiRouter.post('/scammers/:id/calls', requireAuth, async (req, res) => {
 
     const parsedDuration = Math.max(0, parseInt(durationMinutes, 10) || 0);
 
-    const call = await prisma.callLog.create({
+    const call = await db.callLog.create({
       data: {
         scammerId: id,
         durationMinutes: parsedDuration,
@@ -596,12 +596,12 @@ apiRouter.post('/scammers/:id/calls', requireAuth, async (req, res) => {
     });
 
     // Recalculate total time spent on this scammer across all calls
-    const allCalls = await prisma.callLog.findMany({
+    const allCalls = await db.callLog.findMany({
       where: { scammerId: id },
     });
     const totalMinutes = allCalls.reduce((sum, c) => sum + c.durationMinutes, 0);
 
-    await prisma.scammer.update({
+    await db.scammer.update({
       where: { id },
       data: { totalTimeSpent: totalMinutes },
     });
@@ -642,7 +642,7 @@ apiRouter.put('/scammers/:id/calls/:callId', requireAuth, async (req, res) => {
     const parsedDuration =
       durationMinutes !== undefined ? Math.max(0, parseInt(durationMinutes, 10) || 0) : undefined;
 
-    const updatedCall = await prisma.callLog.update({
+    const updatedCall = await db.callLog.update({
       where: { id: callId },
       data: {
         ...(parsedDuration !== undefined && { durationMinutes: parsedDuration }),
@@ -657,12 +657,12 @@ apiRouter.put('/scammers/:id/calls/:callId', requireAuth, async (req, res) => {
     });
 
     // Recalculate total time
-    const allCalls = await prisma.callLog.findMany({
+    const allCalls = await db.callLog.findMany({
       where: { scammerId: id },
     });
     const totalMinutes = allCalls.reduce((sum, c) => sum + c.durationMinutes, 0);
 
-    await prisma.scammer.update({
+    await db.scammer.update({
       where: { id },
       data: { totalTimeSpent: totalMinutes },
     });
@@ -688,14 +688,14 @@ apiRouter.put('/scammers/:id/calls/:callId', requireAuth, async (req, res) => {
 apiRouter.delete('/scammers/:id/calls/:callId', requireAuth, async (req, res) => {
   try {
     const { id, callId } = req.params;
-    await prisma.callLog.delete({ where: { id: callId } });
+    await db.callLog.delete({ where: { id: callId } });
 
-    const allCalls = await prisma.callLog.findMany({
+    const allCalls = await db.callLog.findMany({
       where: { scammerId: id },
     });
     const totalMinutes = allCalls.reduce((sum, c) => sum + c.durationMinutes, 0);
 
-    await prisma.scammer.update({
+    await db.scammer.update({
       where: { id },
       data: { totalTimeSpent: totalMinutes },
     });
@@ -720,7 +720,7 @@ apiRouter.post('/scammers/:id/fraud-accounts', requireAuth, async (req, res) => 
       return res.status(400).json({ error: 'Account type and details are required.' });
     }
 
-    const account = await prisma.fraudAccount.create({
+    const account = await db.fraudAccount.create({
       data: {
         scammerId: id,
         accountType,
@@ -741,7 +741,7 @@ apiRouter.post('/scammers/:id/fraud-accounts', requireAuth, async (req, res) => 
 apiRouter.delete('/scammers/:id/fraud-accounts/:accId', requireAuth, async (req, res) => {
   try {
     const { accId } = req.params;
-    await prisma.fraudAccount.delete({ where: { id: accId } });
+    await db.fraudAccount.delete({ where: { id: accId } });
     return res.json({ success: true });
   } catch (error) {
     console.error('Delete fraud account error:', error);
@@ -755,12 +755,12 @@ apiRouter.delete('/scammers/:id/fraud-accounts/:accId', requireAuth, async (req,
 
 apiRouter.get('/analytics/monthly', requireAuth, async (_req, res) => {
   try {
-    const allCalls = await prisma.callLog.findMany({
+    const allCalls = await db.callLog.findMany({
       include: { scammer: true },
       orderBy: { date: 'asc' },
     });
 
-    const allScammers = await prisma.scammer.findMany({
+    const allScammers = await db.scammer.findMany({
       include: {
         fraudAccounts: true,
         calls: true,
@@ -978,7 +978,7 @@ apiRouter.post('/ai/assist', requireAuth, async (req, res) => {
 // Get all registered users and system overview stats (Admin only)
 apiRouter.get('/admin/users', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
-    const users = await prisma.user.findMany({
+    const users = await db.user.findMany({
       select: {
         id: true,
         email: true,
@@ -997,9 +997,9 @@ apiRouter.get('/admin/users', requireAuth, requireAdmin, async (req: Authenticat
       orderBy: { createdAt: 'desc' },
     });
 
-    const totalScammers = await prisma.scammer.count();
-    const totalCalls = await prisma.callLog.count();
-    const callsSum = await prisma.callLog.aggregate({
+    const totalScammers = await db.scammer.count();
+    const totalCalls = await db.callLog.count();
+    const callsSum = await db.callLog.aggregate({
       _sum: { durationMinutes: true },
     });
 
@@ -1040,7 +1040,7 @@ apiRouter.post('/admin/users', requireAuth, requireAdmin, async (req: Authentica
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const existing = await prisma.user.findUnique({
+    const existing = await db.user.findUnique({
       where: { email: normalizedEmail },
     });
     if (existing) {
@@ -1048,7 +1048,7 @@ apiRouter.post('/admin/users', requireAuth, requireAdmin, async (req: Authentica
     }
 
     const hashedPassword = await hashPassword(password);
-    const user = await prisma.user.create({
+    const user = await db.user.create({
       data: {
         email: normalizedEmail,
         password: hashedPassword,
@@ -1087,7 +1087,7 @@ apiRouter.patch('/admin/users/:id', requireAuth, requireAdmin, async (req: Authe
     const { id } = req.params;
     const { name, email, role, password } = req.body;
 
-    const existing = await prisma.user.findUnique({ where: { id } });
+    const existing = await db.user.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ error: 'User not found.' });
     }
@@ -1100,7 +1100,7 @@ apiRouter.patch('/admin/users/:id', requireAuth, requireAdmin, async (req: Authe
       updateData.password = await hashPassword(password.trim());
     }
 
-    const updated = await prisma.user.update({
+    const updated = await db.user.update({
       where: { id },
       data: updateData,
       select: {
@@ -1144,12 +1144,12 @@ apiRouter.delete('/admin/users/:id', requireAuth, requireAdmin, async (req: Auth
       return res.status(400).json({ error: 'You cannot delete your own active administrator account.' });
     }
 
-    const existing = await prisma.user.findUnique({ where: { id } });
+    const existing = await db.user.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    await prisma.user.delete({ where: { id } });
+    await db.user.delete({ where: { id } });
     return res.json({ success: true });
   } catch (error) {
     console.error('Admin delete user error:', error);

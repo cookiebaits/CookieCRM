@@ -1,4 +1,4 @@
-import { prisma } from './db.ts';
+import { db } from './db.ts';
 import { hashPassword } from './auth.ts';
 
 export async function seedInitialData() {
@@ -12,7 +12,7 @@ export async function seedInitialData() {
     const hashedAdminPass = await hashPassword(adminPass);
 
     // If legacy tester@cookiebaits or admin@scambaiter.local exists, migrate records to sbadmin@cookiebaits
-    const legacyAdmin = await prisma.user.findFirst({
+    const legacyAdmin = await db.user.findFirst({
       where: {
         email: {
           in: ['tester@cookiebaits', 'admin@scambaiter.local'],
@@ -21,11 +21,11 @@ export async function seedInitialData() {
     });
 
     if (legacyAdmin) {
-      const targetAlreadyExists = await prisma.user.findUnique({
+      const targetAlreadyExists = await db.user.findUnique({
         where: { email: 'sbadmin@cookiebaits' },
       });
       if (!targetAlreadyExists) {
-        await prisma.user.update({
+        await db.user.update({
           where: { id: legacyAdmin.id },
           data: {
             email: 'sbadmin@cookiebaits',
@@ -39,13 +39,13 @@ export async function seedInitialData() {
     }
 
     // Ensure sbadmin@cookiebaits exists and has active credentials
-    const existingSbAdmin = await prisma.user.findUnique({
+    const existingSbAdmin = await db.user.findUnique({
       where: { email: 'sbadmin@cookiebaits' },
     });
 
     let primaryAdminUser;
     if (existingSbAdmin) {
-      primaryAdminUser = await prisma.user.update({
+      primaryAdminUser = await db.user.update({
         where: { id: existingSbAdmin.id },
         data: {
           password: hashedAdminPass,
@@ -54,7 +54,7 @@ export async function seedInitialData() {
       });
       console.log(`[Admin] Synchronized admin credentials for: sbadmin@cookiebaits`);
     } else {
-      primaryAdminUser = await prisma.user.create({
+      primaryAdminUser = await db.user.create({
         data: {
           email: 'sbadmin@cookiebaits',
           name: 'SB Admin',
@@ -68,16 +68,16 @@ export async function seedInitialData() {
 
     // Also synchronize custom ADMIN_USER from Dokploy if set and different from sbadmin@cookiebaits
     if (adminUserEmail !== 'sbadmin@cookiebaits') {
-      const existingCustomAdmin = await prisma.user.findUnique({
+      const existingCustomAdmin = await db.user.findUnique({
         where: { email: adminUserEmail },
       });
       if (existingCustomAdmin) {
-        await prisma.user.update({
+        await db.user.update({
           where: { id: existingCustomAdmin.id },
           data: { password: hashedAdminPass, role: 'admin' },
         });
       } else {
-        await prisma.user.create({
+        await db.user.create({
           data: {
             email: adminUserEmail,
             name: 'Dokploy Admin',
@@ -89,7 +89,7 @@ export async function seedInitialData() {
     }
 
     // Explicitly delete any legacy tester accounts
-    await prisma.user.deleteMany({
+    await db.user.deleteMany({
       where: {
         email: {
           in: ['tester@cookiebaits', 'tester@scambaiter.local', 'tester@cookiebaits.local', 'tester', 'test@cookiebaits', 'bt@cookiebaits.local'],
@@ -99,10 +99,10 @@ export async function seedInitialData() {
 
     const defaultUser = primaryAdminUser;
 
-    const scammerCount = await prisma.scammer.count();
+    const scammerCount = await db.scammer.count();
     if (scammerCount === 0 && defaultUser) {
       // 1. Actively baiting case with calls today
-      const scammer1 = await prisma.scammer.create({
+      const scammer1 = await db.scammer.create({
         data: {
           fullName: 'Alex Watson',
           alias: 'David from Geek Squad Support',
@@ -124,7 +124,7 @@ export async function seedInitialData() {
       });
 
       // Add call log today
-      await prisma.callLog.create({
+      await db.callLog.create({
         data: {
           scammerId: scammer1.id,
           date: new Date(),
@@ -138,7 +138,7 @@ export async function seedInitialData() {
         },
       });
 
-      await prisma.callLog.create({
+      await db.callLog.create({
         data: {
           scammerId: scammer1.id,
           date: new Date(Date.now() - 3600000 * 3),
@@ -152,7 +152,7 @@ export async function seedInitialData() {
       });
 
       // Flagged fraud account
-      await prisma.fraudAccount.create({
+      await db.fraudAccount.create({
         data: {
           scammerId: scammer1.id,
           accountType: 'bank_account',
@@ -164,7 +164,7 @@ export async function seedInitialData() {
       });
 
       // 2. Payment Pending
-      const scammer2 = await prisma.scammer.create({
+      const scammer2 = await db.scammer.create({
         data: {
           fullName: 'Rahul Verma',
           alias: 'Officer Robert Wilson #4092',
@@ -184,7 +184,7 @@ export async function seedInitialData() {
         },
       });
 
-      await prisma.callLog.create({
+      await db.callLog.create({
         data: {
           scammerId: scammer2.id,
           date: new Date(Date.now() - 86400000 * 2),
@@ -196,7 +196,7 @@ export async function seedInitialData() {
         },
       });
 
-      await prisma.fraudAccount.create({
+      await db.fraudAccount.create({
         data: {
           scammerId: scammer2.id,
           accountType: 'crypto_wallet',
@@ -208,7 +208,7 @@ export async function seedInitialData() {
       });
 
       // 3. New Scammer
-      await prisma.scammer.create({
+      await db.scammer.create({
         data: {
           fullName: 'James Miller',
           alias: 'PayPal Fraud Prevention Agent',
@@ -227,7 +227,7 @@ export async function seedInitialData() {
       });
 
       // 4. Revealed / Reported
-      const scammer4 = await prisma.scammer.create({
+      const scammer4 = await db.scammer.create({
         data: {
           fullName: 'Michael Anderson',
           alias: 'Senior Tech Lead Steve',
@@ -245,7 +245,7 @@ export async function seedInitialData() {
         },
       });
 
-      await prisma.callLog.create({
+      await db.callLog.create({
         data: {
           scammerId: scammer4.id,
           date: new Date(Date.now() - 86400000 * 5),

@@ -68,10 +68,6 @@ function apiPlugin(): Plugin {
   return {
     name: 'api-server-plugin',
     async configureServer(server) {
-      const defaultDbPath = path.resolve(process.cwd(), 'prisma/scambaiter.db');
-      if (!process.env.DATABASE_URL || !process.env.DATABASE_URL.startsWith('file:')) {
-        process.env.DATABASE_URL = `file:${defaultDbPath}`;
-      }
       const { backendApp } = await import('./src/server/app.ts');
       server.middlewares.use(backendApp);
     },

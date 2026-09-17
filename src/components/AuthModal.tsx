@@ -27,7 +27,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [configuredClientId, setConfiguredClientId] = useState<string>('');
   const [configAdminUser, setConfigAdminUser] = useState<string>('sbadmin@cookiebaits');
-  const [dbSource, setDbSource] = useState<string>('Default SQLite (prisma/scambaiter.db)');
+  const [dbSource, setDbSource] = useState<string>('Supabase Database');
 
   // Initialize Google Identity Services if client ID is configured
   useEffect(() => {
