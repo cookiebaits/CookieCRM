@@ -1,21 +1,23 @@
-import { db } from './db.ts';
+import { db, waitForDatabaseReady } from './db.ts';
 import { hashPassword } from './auth.ts';
 
 export async function seedInitialData() {
   try {
+    // Wait for Supabase direct PostgreSQL connection to establish and schema to validate
+    await waitForDatabaseReady();
+
+    const cleanEnv = (val?: string) => (val || '').replace(/^["']|["']$/g, '').trim();
+
     // 1. ADMIN USER Provisioning / Synchronization (Dokploy Environment Settings)
-    // Default admin username changed from tester@cookiebaits to sbadmin@cookiebaits
-    const adminUserEmail = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
-      ? process.env.ADMIN_USER.toLowerCase().trim()
-      : 'sbadmin@cookiebaits';
-    const adminPass = process.env.ADMIN_PASS?.trim() || 'sbAdmin2026!#';
+    const adminUserEmail = cleanEnv(process.env.ADMIN_USER).toLowerCase() || 'sbadmin@cookiebaits';
+    const adminPass = cleanEnv(process.env.ADMIN_PASS) || 'sbAdmin2026!#';
     const hashedAdminPass = await hashPassword(adminPass);
 
-    // If legacy tester@cookiebaits or admin@scambaiter.local exists, migrate records to sbadmin@cookiebaits
+    // If legacy admin@scambaiter.local exists, migrate records to sbadmin@cookiebaits
     const legacyAdmin = await db.user.findFirst({
       where: {
         email: {
-          in: ['tester@cookiebaits', 'admin@scambaiter.local'],
+          in: ['admin@scambaiter.local'],
         },
       },
     });
@@ -32,6 +34,7 @@ export async function seedInitialData() {
             name: 'SB Admin',
             password: hashedAdminPass,
             role: 'admin',
+            isActivated: true,
           },
         });
         console.log(`[Admin] Migrated legacy user ${legacyAdmin.email} to sbadmin@cookiebaits`);
@@ -50,6 +53,7 @@ export async function seedInitialData() {
         data: {
           password: hashedAdminPass,
           role: 'admin',
+          isActivated: true,
         },
       });
       console.log(`[Admin] Synchronized admin credentials for: sbadmin@cookiebaits`);
@@ -60,6 +64,7 @@ export async function seedInitialData() {
           name: 'SB Admin',
           password: hashedAdminPass,
           role: 'admin',
+          isActivated: true,
           avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
         },
       });
@@ -74,28 +79,87 @@ export async function seedInitialData() {
       if (existingCustomAdmin) {
         await db.user.update({
           where: { id: existingCustomAdmin.id },
-          data: { password: hashedAdminPass, role: 'admin' },
+          data: { password: hashedAdminPass, role: 'admin', isActivated: true },
         });
+        console.log(`[Admin] Synchronized Dokploy ADMIN_USER credentials for: ${adminUserEmail}`);
       } else {
         await db.user.create({
           data: {
             email: adminUserEmail,
-            name: 'Dokploy Admin',
+            name: adminUserEmail.includes('@') ? adminUserEmail.split('@')[0] : 'Dokploy Admin',
             password: hashedAdminPass,
             role: 'admin',
+            isActivated: true,
           },
         });
+        console.log(`[Admin] Provisioned Dokploy ADMIN_USER: ${adminUserEmail}`);
       }
     }
 
-    // Explicitly delete any legacy tester accounts
-    await db.user.deleteMany({
-      where: {
-        email: {
-          in: ['tester@cookiebaits', 'tester@scambaiter.local', 'tester@cookiebaits.local', 'tester', 'test@cookiebaits', 'bt@cookiebaits.local'],
-        },
-      },
+    // 2. TESTER USER Provisioning / Synchronization (Dokploy Environment Settings)
+    // Make sure TESTER_USER is active, and TESTER_PASS matches
+    const testerUserEmail = cleanEnv(process.env.TESTER_USER).toLowerCase() || 'cookiescambait@gmail.com';
+    const testerPass = cleanEnv(process.env.TESTER_PASS) || 'scambaiter2026!';
+    const hashedTesterPass = await hashPassword(testerPass);
+
+    const isTesterAdmin =
+      testerUserEmail === 'cookiescambait@gmail.com' ||
+      testerUserEmail === adminUserEmail;
+
+    const existingTester = await db.user.findUnique({
+      where: { email: testerUserEmail },
     });
+
+    if (existingTester) {
+      await db.user.update({
+        where: { id: existingTester.id },
+        data: {
+          password: hashedTesterPass,
+          isActivated: true,
+          activationToken: null,
+          activationExpiresAt: null,
+          role: isTesterAdmin ? 'admin' : (existingTester.role || 'scambaiter'),
+        },
+      });
+      console.log(`[Tester] Synchronized TESTER_USER (${testerUserEmail}) with active status and matching TESTER_PASS.`);
+    } else {
+      await db.user.create({
+        data: {
+          email: testerUserEmail,
+          name: testerUserEmail.includes('@') ? testerUserEmail.split('@')[0] : 'Tester User',
+          password: hashedTesterPass,
+          role: isTesterAdmin ? 'admin' : 'scambaiter',
+          isActivated: true,
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        },
+      });
+      console.log(`[Tester] Provisioned active TESTER_USER (${testerUserEmail}) with matching TESTER_PASS.`);
+    }
+
+    // Clean up obsolete test accounts without touching active admin or tester accounts
+    const protectedEmails = [
+      'sbadmin@cookiebaits',
+      adminUserEmail,
+      testerUserEmail,
+      'cookiescambait@gmail.com',
+    ].filter(Boolean);
+
+    const legacyEmailsToDelete = [
+      'tester@scambaiter.local',
+      'tester@cookiebaits.local',
+      'test@cookiebaits',
+      'bt@cookiebaits.local',
+    ].filter((e) => !protectedEmails.includes(e));
+
+    if (legacyEmailsToDelete.length > 0) {
+      await db.user.deleteMany({
+        where: {
+          email: {
+            in: legacyEmailsToDelete,
+          },
+        },
+      });
+    }
 
     const defaultUser = primaryAdminUser;
 

@@ -59,14 +59,15 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     return res.status(401).json({ error: 'User not found in database.' });
   }
 
-  // Check if this user matches the configured ADMIN_USER env (default sbadmin@cookiebaits)
-  const adminEnvUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
-    ? process.env.ADMIN_USER.toLowerCase().trim()
-    : 'sbadmin@cookiebaits';
+  // Check if this user matches the configured ADMIN_USER or TESTER_USER env
+  const cleanEnv = (val?: string) => (val || '').replace(/^["']|["']$/g, '').trim();
+  const adminEnvUser = cleanEnv(process.env.ADMIN_USER).toLowerCase() || 'sbadmin@cookiebaits';
+  const testerEnvUser = cleanEnv(process.env.TESTER_USER).toLowerCase();
 
   const isAuthorizedAdmin =
     (adminEnvUser && dbUser.email.toLowerCase().trim() === adminEnvUser) ||
-    dbUser.email.toLowerCase().trim() === 'cookiescambait@gmail.com';
+    dbUser.email.toLowerCase().trim() === 'cookiescambait@gmail.com' ||
+    (testerEnvUser && dbUser.email.toLowerCase().trim() === testerEnvUser && testerEnvUser === 'cookiescambait@gmail.com');
 
   if (isAuthorizedAdmin) {
     dbUser.role = 'admin';
@@ -82,12 +83,12 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 export function isAdminUser(user: AuthUser | { email?: string; role?: string; googleId?: string | null } | null | undefined): boolean {
   if (!user) return false;
   const userEmail = user.email?.toLowerCase().trim();
-  const adminEnvUser = (process.env.ADMIN_USER && process.env.ADMIN_USER !== 'tester@cookiebaits')
-    ? process.env.ADMIN_USER.toLowerCase().trim()
-    : 'sbadmin@cookiebaits';
+  const cleanEnv = (val?: string) => (val || '').replace(/^["']|["']$/g, '').trim();
+  const adminEnvUser = cleanEnv(process.env.ADMIN_USER).toLowerCase() || 'sbadmin@cookiebaits';
+  const testerEnvUser = cleanEnv(process.env.TESTER_USER).toLowerCase();
 
   // Strict check: if user email matches configured Dokploy ADMIN_USER env or the applet owner
-  if (userEmail && (userEmail === adminEnvUser || userEmail === 'cookiescambait@gmail.com')) {
+  if (userEmail && (userEmail === adminEnvUser || userEmail === 'cookiescambait@gmail.com' || (testerEnvUser && userEmail === testerEnvUser && testerEnvUser === 'cookiescambait@gmail.com'))) {
     return true;
   }
 

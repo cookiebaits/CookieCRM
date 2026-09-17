@@ -609,6 +609,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
                   </div>
                 )}
 
+                {/* Database Connection Status */}
+                <div className="flex items-center justify-between text-[11px] text-slate-400 bg-slate-950/80 border border-slate-800/80 rounded-lg px-3 py-1.5 mb-4">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        dbSource.includes('Active')
+                          ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                          : 'bg-amber-400'
+                      }`}
+                    ></span>
+                    <span>Database:</span>
+                  </span>
+                  <span className="font-mono text-slate-300 text-[10px] tracking-tight">{dbSource}</span>
+                </div>
+
                 {/* Google Sign In Section */}
                 <div className="space-y-3 mb-6">
                   <button

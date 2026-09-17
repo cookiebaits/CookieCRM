@@ -148,20 +148,19 @@ function persistToDisk() {
 loadFromDisk();
 
 // -----------------------------------------------------------
-// Supabase Direct PostgreSQL Connection Setup
+// PostgreSQL Database Connection Setup (Supabase Direct PostgreSQL)
 // -----------------------------------------------------------
 export function getDirectPostgresUrl(): string | null {
   const candidates = [
     process.env.DATABASE_URL,
     process.env.DIRECT_URL,
-    process.env.SUPABASE_DB_URL,
     process.env.SUPABASE_DATABASE_URL,
-    process.env.DB,
+    process.env.SUPABASE_DB_URL,
   ];
 
   for (const c of candidates) {
     if (!c) continue;
-    const trimmed = c.trim();
+    const trimmed = c.trim().replace(/^["']|["']$/g, '');
     if (/^postgres(ql)?:\/\//i.test(trimmed)) {
       return trimmed;
     }
@@ -169,36 +168,95 @@ export function getDirectPostgresUrl(): string | null {
   return null;
 }
 
+function maskDbUrl(url: string): string {
+  try {
+    return url.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
+  } catch {
+    return 'postgresql://***:***@...';
+  }
+}
+
 let pgPool: pg.Pool | null = null;
 let isPostgresReady = false;
+
+let dbReadyResolver: ((ready: boolean) => void) | null = null;
+const dbReadyPromise = new Promise<boolean>((resolve) => {
+  dbReadyResolver = resolve;
+});
+
+export async function waitForDatabaseReady(timeoutMs = 6000): Promise<boolean> {
+  if (isPostgresReady) return true;
+  if (!getDirectPostgresUrl()) return false;
+  return Promise.race([
+    dbReadyPromise,
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(isPostgresReady), timeoutMs)),
+  ]);
+}
 
 const directConnString = getDirectPostgresUrl();
 
 if (directConnString) {
-  try {
-    pgPool = new pg.Pool({
-      connectionString: directConnString,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
-      max: 10,
-    });
+  const masked = maskDbUrl(directConnString);
+  console.log(`[DB-SUPABASE] Detected Supabase direct PostgreSQL link: ${masked}`);
 
-    // Verify connection and auto-create schema
-    pgPool.connect((err, client, release) => {
-      if (err) {
-        console.warn(`[DB-POSTGRES] Notice: Could not connect to direct PostgreSQL connection (${err.message}). Using resilient local storage.`);
-      } else {
-        release();
-        isPostgresReady = true;
-        console.log('[DB-POSTGRES] Connected to Supabase via direct connection string!');
-        initSupabaseDirectSchema();
-      }
-    });
-  } catch (err) {
-    console.warn('[DB-POSTGRES] Pool initialization warning:', err);
+  const isDisableSsl =
+    directConnString.includes('sslmode=disable') ||
+    directConnString.includes('@localhost') ||
+    directConnString.includes('@127.0.0.1');
+
+  function initPgPool(useSsl: boolean) {
+    try {
+      const pool = new pg.Pool({
+        connectionString: directConnString!,
+        ssl: useSsl ? { rejectUnauthorized: false } : false,
+        connectionTimeoutMillis: 10000,
+        idleTimeoutMillis: 30000,
+        max: 15,
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
+      });
+
+      pool.on('error', (err) => {
+        console.warn('[DB-SUPABASE] Background pool notice (auto-recovered):', err.message);
+      });
+
+      pool.connect((err, client, release) => {
+        if (err) {
+          const errMsg = err.message || '';
+          if (useSsl && (errMsg.includes('does not support SSL') || errMsg.includes('SSL') || errMsg.includes('no pg_hba.conf entry'))) {
+            console.log('[DB-SUPABASE] Server does not require SSL. Reconnecting to PostgreSQL without SSL...');
+            pool.end().catch(() => {});
+            initPgPool(false);
+            return;
+          }
+
+          if (errMsg.includes('ENETUNREACH') || errMsg.includes('ETIMEDOUT')) {
+            console.warn(`[DB-SUPABASE] Connection notice (${errMsg}): If your network environment does not route IPv6 to db.fanivhbjwfaiezpsawpa.supabase.co:5432, use your Supabase Transaction Pooler URL (aws-0-[region].pooler.supabase.com:6543) which has native IPv4 support.`);
+          } else {
+            console.warn(`[DB-SUPABASE] Notice: Could not connect to direct PostgreSQL connection (${errMsg}). Operating in resilient storage mode.`);
+          }
+
+          if (dbReadyResolver) dbReadyResolver(false);
+        } else {
+          release();
+          pgPool = pool;
+          isPostgresReady = true;
+          console.log(`[DB-SUPABASE] Connected successfully to Supabase PostgreSQL database (${useSsl ? 'SSL enabled' : 'Internal / SSL disabled'})!`);
+          initSupabaseDirectSchema().then(() => {
+            if (dbReadyResolver) dbReadyResolver(true);
+          });
+        }
+      });
+    } catch (err) {
+      console.warn('[DB-SUPABASE] Pool initialization warning:', err);
+      if (dbReadyResolver) dbReadyResolver(false);
+    }
   }
+
+  initPgPool(!isDisableSsl);
 } else {
-  console.log('[DB] No direct PostgreSQL connection string detected (e.g. postgresql://...). Operating in local resilient mode.');
+  console.log('[DB] No direct PostgreSQL connection string detected. Set DATABASE_URL with your Supabase direct postgres link.');
+  if (dbReadyResolver) dbReadyResolver(false);
 }
 
 async function initSupabaseDirectSchema() {
@@ -238,7 +296,7 @@ async function initSupabaseDirectSchema() {
         priority INT NOT NULL DEFAULT 1,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        user_id VARCHAR(64) REFERENCES users(id) ON DELETE CASCADE
+        user_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL
       );
 
       CREATE TABLE IF NOT EXISTS call_logs (
@@ -275,10 +333,31 @@ async function initSupabaseDirectSchema() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_activated BOOLEAN NOT NULL DEFAULT TRUE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_expires_at TIMESTAMPTZ;
+
+      -- Ensure all columns on scammers table exist
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS remote_access_id VARCHAR(255);
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS ip_address VARCHAR(100);
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS victim_given_info TEXT;
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS carrier VARCHAR(255);
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS location VARCHAR(255);
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS organization VARCHAR(255);
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS user_id VARCHAR(64);
+
+      -- Ensure all columns on call_logs table exist
+      ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS audio_recording_url TEXT;
+      ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS audio_recording_name VARCHAR(255);
+      ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS victim_persona_used VARCHAR(255);
+      ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS info_given TEXT;
+      ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS outcome VARCHAR(255);
+
+      -- Ensure all columns on fraud_accounts table exist
+      ALTER TABLE fraud_accounts ADD COLUMN IF NOT EXISTS institution VARCHAR(255);
+      ALTER TABLE fraud_accounts ADD COLUMN IF NOT EXISTS holder_name VARCHAR(255);
+      ALTER TABLE fraud_accounts ADD COLUMN IF NOT EXISTS reported_to_bank BOOLEAN NOT NULL DEFAULT FALSE;
     `);
-    console.log('[DB-POSTGRES] Supabase PostgreSQL database tables validated and ready.');
+    console.log('[DB-SUPABASE] Supabase PostgreSQL database tables validated and ready.');
   } catch (err) {
-    console.warn('[DB-POSTGRES] Automated table validation warning:', err);
+    console.warn('[DB-SUPABASE] Automated table validation warning:', err);
   }
 }
 
@@ -533,19 +612,20 @@ export const db = {
 
       if (isPostgresReady && pgPool) {
         try {
-          await pgPool.query(
+          const res = await pgPool.query(
             `INSERT INTO users (id, email, password, name, avatar_url, google_id, role, is_activated, activation_token, activation_expires_at, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-             ON CONFLICT (id) DO UPDATE SET
-               email = EXCLUDED.email,
+             ON CONFLICT (email) DO UPDATE SET
                name = EXCLUDED.name,
-               password = EXCLUDED.password,
-               avatar_url = EXCLUDED.avatar_url,
+               password = COALESCE(EXCLUDED.password, users.password),
+               avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
+               google_id = COALESCE(EXCLUDED.google_id, users.google_id),
                role = EXCLUDED.role,
                is_activated = EXCLUDED.is_activated,
                activation_token = EXCLUDED.activation_token,
                activation_expires_at = EXCLUDED.activation_expires_at,
-               updated_at = NOW()`,
+               updated_at = NOW()
+             RETURNING id`,
             [
               user.id,
               user.email,
@@ -561,8 +641,11 @@ export const db = {
               user.updatedAt
             ]
           );
+          if (res?.rows?.[0]?.id) {
+            user.id = res.rows[0].id;
+          }
         } catch (err) {
-          console.warn('[DB-POSTGRES] create user warning:', err);
+          console.warn('[DB-SUPABASE] create user warning:', err);
         }
       }
 
@@ -825,23 +908,51 @@ export const db = {
 
       if (isPostgresReady && pgPool) {
         try {
+          let safeUserId: string | null = scammer.userId || null;
+          if (safeUserId) {
+            const uCheck = await pgPool.query('SELECT id FROM users WHERE id = $1 LIMIT 1', [safeUserId]);
+            if (!uCheck.rows[0]) {
+              safeUserId = null;
+            }
+          }
+
           await pgPool.query(
             `INSERT INTO scammers (
                id, full_name, alias, phone_number, status, carrier, location,
                scam_type, organization, flagged, danger_level, victim_given_info,
                remote_access_id, ip_address, notes, total_time_spent, target_value,
                priority, created_at, updated_at, user_id
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+             ON CONFLICT (id) DO UPDATE SET
+               full_name = EXCLUDED.full_name,
+               alias = EXCLUDED.alias,
+               phone_number = EXCLUDED.phone_number,
+               status = EXCLUDED.status,
+               carrier = EXCLUDED.carrier,
+               location = EXCLUDED.location,
+               scam_type = EXCLUDED.scam_type,
+               organization = EXCLUDED.organization,
+               flagged = EXCLUDED.flagged,
+               danger_level = EXCLUDED.danger_level,
+               victim_given_info = EXCLUDED.victim_given_info,
+               remote_access_id = EXCLUDED.remote_access_id,
+               ip_address = EXCLUDED.ip_address,
+               notes = EXCLUDED.notes,
+               total_time_spent = EXCLUDED.total_time_spent,
+               target_value = EXCLUDED.target_value,
+               priority = EXCLUDED.priority,
+               updated_at = NOW(),
+               user_id = EXCLUDED.user_id`,
             [
               scammer.id, scammer.fullName, scammer.alias, scammer.phoneNumber, scammer.status,
               scammer.carrier, scammer.location, scammer.scamType, scammer.organization,
               scammer.flagged, scammer.dangerLevel, scammer.victimGivenInfo, scammer.remoteAccessId,
               scammer.ipAddress, scammer.notes, scammer.totalTimeSpent, scammer.targetValue,
-              scammer.priority, scammer.createdAt, scammer.updatedAt, scammer.userId
+              scammer.priority, scammer.createdAt, scammer.updatedAt, safeUserId
             ]
           );
         } catch (err) {
-          console.warn('[DB-POSTGRES] create scammer warning:', err);
+          console.warn('[DB-SUPABASE] create scammer warning:', err);
         }
       }
 
@@ -974,7 +1085,17 @@ export const db = {
                id, scammer_id, date, duration_minutes, notes,
                audio_recording_url, audio_recording_name, victim_persona_used,
                info_given, outcome, created_at, updated_at
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+             ON CONFLICT (id) DO UPDATE SET
+               date = EXCLUDED.date,
+               duration_minutes = EXCLUDED.duration_minutes,
+               notes = EXCLUDED.notes,
+               audio_recording_url = EXCLUDED.audio_recording_url,
+               audio_recording_name = EXCLUDED.audio_recording_name,
+               victim_persona_used = EXCLUDED.victim_persona_used,
+               info_given = EXCLUDED.info_given,
+               outcome = EXCLUDED.outcome,
+               updated_at = NOW()`,
             [
               call.id, call.scammerId, call.date, call.durationMinutes, call.notes,
               call.audioRecordingUrl, call.audioRecordingName, call.victimPersonaUsed,
@@ -982,7 +1103,7 @@ export const db = {
             ]
           );
         } catch (err) {
-          console.warn('[DB-POSTGRES] create call_log warning:', err);
+          console.warn('[DB-SUPABASE] create call_log warning:', err);
         }
       }
 
@@ -1141,14 +1262,20 @@ export const db = {
           await pgPool.query(
             `INSERT INTO fraud_accounts (
                id, scammer_id, account_type, account_details, institution, holder_name, reported_to_bank, created_at
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (id) DO UPDATE SET
+               account_type = EXCLUDED.account_type,
+               account_details = EXCLUDED.account_details,
+               institution = EXCLUDED.institution,
+               holder_name = EXCLUDED.holder_name,
+               reported_to_bank = EXCLUDED.reported_to_bank`,
             [
               account.id, account.scammerId, account.accountType, account.accountDetails,
               account.institution, account.holderName, account.reportedToBank, account.createdAt
             ]
           );
         } catch (err) {
-          console.warn('[DB-POSTGRES] create fraud_account warning:', err);
+          console.warn('[DB-SUPABASE] create fraud_account warning:', err);
         }
       }
 
