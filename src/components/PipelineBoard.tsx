@@ -54,7 +54,7 @@ interface ColumnConfig {
 const CANONICAL_COLUMNS: ColumnConfig[] = [
   {
     status: 'New',
-    title: 'New',
+    title: 'Uncalled',
     badgeClass: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
     barColor: 'bg-sky-500',
     borderColor: 'border-sky-500/40',
@@ -63,7 +63,7 @@ const CANONICAL_COLUMNS: ColumnConfig[] = [
   },
   {
     status: 'Qualified',
-    title: 'Qualified',
+    title: 'In Progress',
     badgeClass: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
     barColor: 'bg-teal-500',
     borderColor: 'border-teal-500/40',
@@ -72,7 +72,7 @@ const CANONICAL_COLUMNS: ColumnConfig[] = [
   },
   {
     status: 'Proposition',
-    title: 'Proposition',
+    title: 'Top Baits',
     badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     barColor: 'bg-amber-500',
     borderColor: 'border-amber-500/40',
@@ -81,7 +81,7 @@ const CANONICAL_COLUMNS: ColumnConfig[] = [
   },
   {
     status: 'Won',
-    title: 'Won',
+    title: 'Reported / Down',
     badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     barColor: 'bg-emerald-500',
     borderColor: 'border-emerald-500/40',
@@ -958,10 +958,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                     className="bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-[9px] text-slate-300 hover:text-white cursor-pointer focus:outline-none"
                                     title="Move stage"
                                   >
-                                    <option value="New">New</option>
-                                    <option value="Qualified">Qualified</option>
-                                    <option value="Proposition">Proposition</option>
-                                    <option value="Won">Won</option>
+                                    <option value="New">Uncalled</option>
+                                    <option value="Qualified">In Progress</option>
+                                    <option value="Proposition">Top Baits</option>
+                                    <option value="Won">Reported / Down</option>
                                   </select>
                                 </div>
                               </div>
@@ -1095,10 +1095,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             }
                             className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 cursor-pointer focus:outline-none"
                           >
-                            <option value="New">New</option>
-                            <option value="Qualified">Qualified</option>
-                            <option value="Proposition">Proposition</option>
-                            <option value="Won">Won</option>
+                            <option value="New">Uncalled</option>
+                            <option value="Qualified">In Progress</option>
+                            <option value="Proposition">Top Baits</option>
+                            <option value="Won">Reported / Down</option>
                           </select>
                         </td>
                       </tr>

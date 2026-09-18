@@ -20,6 +20,7 @@ import {
   DollarSign,
   Copy,
   ExternalLink,
+  ChevronLeft,
 } from 'lucide-react';
 import { api } from '../api.ts';
 import { AudioPlayerWidget } from './AudioPlayerWidget.tsx';
@@ -343,55 +344,79 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
-        {/* Modal Header */}
-        <div className="p-5 border-b border-slate-800 bg-slate-950/70 flex flex-wrap items-center justify-between gap-4">
+    <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 overflow-y-auto flex flex-col min-h-screen w-full animate-fadeIn">
+      {/* Top Header Navigation Bar */}
+      <div className="sticky top-0 z-30 bg-slate-900/95 border-b border-slate-800 backdrop-blur-md px-4 sm:px-6 py-3.5 shadow-xl">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          {/* Return Back Button */}
           <div className="flex items-center gap-3">
-            <div
-              className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-lg ${
-                flagged
-                  ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30'
-                  : 'bg-slate-800 text-slate-300'
-              }`}
+            <button
+              type="button"
+              id="back-to-board-btn"
+              onClick={onClose}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-2 border border-slate-700 shadow transition hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
             >
-              {flagged ? <ShieldAlert className="w-6 h-6" /> : <Phone className="w-6 h-6" />}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-                  {scammer.fullName}
-                </h2>
-                {scammer.alias && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-400 font-mono border border-slate-700">
-                    &quot;{scammer.alias}&quot;
-                  </span>
-                )}
+              <ChevronLeft className="w-4 h-4 text-amber-400" />
+              <span>Back to Targets Board</span>
+            </button>
+
+            <div className="h-6 w-px bg-slate-800 hidden sm:block" />
+
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg ${
+                  flagged
+                    ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30'
+                    : 'bg-slate-800 text-slate-300 border border-slate-700'
+                }`}
+              >
+                {flagged ? <ShieldAlert className="w-5 h-5" /> : <Phone className="w-5 h-5" />}
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-                <span className="font-mono text-slate-300">{scammer.phoneNumber}</span>
-                <span>&bull;</span>
-                <span className="text-slate-300">{organization || scamType}</span>
-                <span>&bull;</span>
-                <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  Today: {scammer.todayTimeSpent || 0}m
-                </span>
-                <span>(Total: {scammer.totalTimeSpent}m)</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                    {scammer.fullName}
+                  </h2>
+                  {scammer.alias && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-400 font-mono border border-slate-700">
+                      &quot;{scammer.alias}&quot;
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2.5 text-xs text-slate-400 mt-0.5">
+                  <span className="font-mono text-slate-300">{scammer.phoneNumber}</span>
+                  <span>&bull;</span>
+                  <span className="text-amber-300 font-medium">{scamType}</span>
+                  {organization && (
+                    <>
+                      <span>&bull;</span>
+                      <span className="text-slate-300">{organization}</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Quick Action Controls */}
-          <div className="flex items-center gap-2">
+          {/* Time Counters & Flag/Close controls */}
+          <div className="flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+              <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                Today: {scammer.todayTimeSpent || 0}m
+              </span>
+              <span className="text-slate-600">&bull;</span>
+              <span className="text-slate-300 font-mono font-bold">Total: {scammer.totalTimeSpent}m</span>
+            </div>
+
             <button
               type="button"
               id="flag-scammer-btn"
               onClick={handleToggleFlag}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer ${
                 flagged
                   ? 'bg-rose-600/20 text-rose-300 border-rose-500/50 shadow-sm'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-750'
               }`}
             >
               <AlertTriangle className="w-3.5 h-3.5" />
@@ -402,15 +427,19 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               type="button"
               id="close-scammer-modal-btn"
               onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition cursor-pointer"
+              title="Close and return to board"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
+      </div>
 
+      {/* Main Full Page Workspace Container */}
+      <div className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Live Call Stopwatch Bar */}
-        <div className="px-5 py-2.5 bg-slate-950/40 border-b border-slate-800/80">
+        <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl">
           <CallTimerWidget
             scammerName={scammer.fullName}
             onLogCompletedCall={(minutes) => {
@@ -422,14 +451,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-800 bg-slate-950 px-5 gap-2 overflow-x-auto text-xs">
+        <div className="flex border-b border-slate-800 bg-slate-900/60 rounded-2xl p-1.5 gap-2 overflow-x-auto text-xs border">
           <button
             type="button"
             onClick={() => setActiveTab('calls')}
-            className={`py-3 px-3 font-semibold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
+            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
               activeTab === 'calls'
-                ? 'border-rose-500 text-rose-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
             <Clock className="w-4 h-4" />
@@ -439,10 +468,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('overview')}
-            className={`py-3 px-3 font-semibold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
+            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
               activeTab === 'overview'
-                ? 'border-rose-500 text-rose-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
             <Radio className="w-4 h-4" />
@@ -452,10 +481,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('victim_info')}
-            className={`py-3 px-3 font-semibold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
+            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
               activeTab === 'victim_info'
-                ? 'border-rose-500 text-rose-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
             <Shield className="w-4 h-4" />
@@ -465,10 +494,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('fraud_accounts')}
-            className={`py-3 px-3 font-semibold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
+            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
               activeTab === 'fraud_accounts'
-                ? 'border-rose-500 text-rose-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
             <DollarSign className="w-4 h-4" />
@@ -478,19 +507,19 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('ai_copilot')}
-            className={`py-3 px-3 font-semibold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
+            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
               activeTab === 'ai_copilot'
-                ? 'border-amber-500 text-amber-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-amber-600 text-white shadow-lg shadow-amber-950/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-amber-400" />
+            <Sparkles className="w-4 h-4 text-amber-300" />
             <span>Gemini AI Copilot</span>
           </button>
         </div>
 
-        {/* Modal Body Content */}
-        <div className="p-5 overflow-y-auto flex-1 space-y-5">
+        {/* Page Content Panel */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-6 backdrop-blur-sm">
           {/* TAB 1: CALL LOGS & RECORDINGS */}
           {activeTab === 'calls' && (
             <div className="space-y-4">
