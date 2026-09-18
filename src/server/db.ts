@@ -1042,6 +1042,30 @@ export const db = {
       return { ...deleted };
     },
 
+    async deleteMany(args?: { where?: Record<string, any> }): Promise<{ count: number }> {
+      if (isPostgresReady && pgPool) {
+        try {
+          if (args?.where?.id?.in) {
+            await pgPool.query('DELETE FROM scammers WHERE id = ANY($1)', [args.where.id.in]);
+          } else {
+            await pgPool.query('DELETE FROM scammers');
+          }
+        } catch (err) {
+          console.warn('[DB-POSTGRES] deleteMany scammers warning:', err);
+        }
+      }
+      const beforeCount = state.scammers.length;
+      if (!args?.where) {
+        state.scammers = [];
+        state.callLogs = [];
+        state.fraudAccounts = [];
+      } else {
+        state.scammers = state.scammers.filter((s) => !matchesWhere(s, args.where));
+      }
+      persistToDisk();
+      return { count: beforeCount - state.scammers.length };
+    },
+
     async count(args?: { where?: Record<string, any> }): Promise<number> {
       if (isPostgresReady && pgPool) {
         try {
@@ -1113,7 +1137,7 @@ export const db = {
     },
 
     async findMany(args?: {
-      where?: { scammerId?: string };
+      where?: { scammerId?: string | { in?: string[] } };
       include?: any;
       orderBy?: { date?: 'asc' | 'desc' };
     }): Promise<CallLogRecord[]> {
@@ -1122,7 +1146,13 @@ export const db = {
           const dir = args?.orderBy?.date === 'asc' ? 'ASC' : 'DESC';
           let res;
           if (args?.where?.scammerId) {
-            res = await pgPool.query(`SELECT * FROM call_logs WHERE scammer_id = $1 ORDER BY date ${dir}`, [args.where.scammerId]);
+            if (typeof args.where.scammerId === 'string') {
+              res = await pgPool.query(`SELECT * FROM call_logs WHERE scammer_id = $1 ORDER BY date ${dir}`, [args.where.scammerId]);
+            } else if (args.where.scammerId?.in) {
+              res = await pgPool.query(`SELECT * FROM call_logs WHERE scammer_id = ANY($1::varchar[]) ORDER BY date ${dir}`, [args.where.scammerId.in]);
+            } else {
+              res = await pgPool.query(`SELECT * FROM call_logs ORDER BY date ${dir}`);
+            }
           } else {
             res = await pgPool.query(`SELECT * FROM call_logs ORDER BY date ${dir}`);
           }
@@ -1215,6 +1245,24 @@ export const db = {
       return { ...deleted };
     },
 
+    async deleteMany(args?: { where?: Record<string, any> }): Promise<{ count: number }> {
+      if (isPostgresReady && pgPool) {
+        try {
+          await pgPool.query('DELETE FROM call_logs');
+        } catch (err) {
+          console.warn('[DB-POSTGRES] deleteMany call_logs warning:', err);
+        }
+      }
+      const beforeCount = state.callLogs.length;
+      if (!args?.where) {
+        state.callLogs = [];
+      } else {
+        state.callLogs = state.callLogs.filter((c) => !matchesWhere(c, args.where));
+      }
+      persistToDisk();
+      return { count: beforeCount - state.callLogs.length };
+    },
+
     async count(): Promise<number> {
       if (isPostgresReady && pgPool) {
         try {
@@ -1299,7 +1347,43 @@ export const db = {
       persistToDisk();
       return { ...deleted };
     },
+
+    async deleteMany(args?: { where?: Record<string, any> }): Promise<{ count: number }> {
+      if (isPostgresReady && pgPool) {
+        try {
+          await pgPool.query('DELETE FROM fraud_accounts');
+        } catch (err) {
+          console.warn('[DB-POSTGRES] deleteMany fraud_accounts warning:', err);
+        }
+      }
+      const beforeCount = state.fraudAccounts.length;
+      if (!args?.where) {
+        state.fraudAccounts = [];
+      } else {
+        state.fraudAccounts = state.fraudAccounts.filter((f) => !matchesWhere(f, args.where));
+      }
+      persistToDisk();
+      return { count: beforeCount - state.fraudAccounts.length };
+    },
   },
 };
+
+export async function clearAllPrefilledData() {
+  if (isPostgresReady && pgPool) {
+    try {
+      await pgPool.query('DELETE FROM call_logs');
+      await pgPool.query('DELETE FROM fraud_accounts');
+      await pgPool.query('DELETE FROM scammers');
+      console.log('[DB] Cleared all prefilled scammers, calls, and fraud records from PostgreSQL.');
+    } catch (err) {
+      console.warn('[DB] Warning clearing postgres prefilled data:', err);
+    }
+  }
+  state.scammers = [];
+  state.callLogs = [];
+  state.fraudAccounts = [];
+  persistToDisk();
+  console.log('[DB] Cleared all prefilled data from local store.');
+}
 
 export default db;

@@ -100,14 +100,11 @@ export const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ curren
   };
 
   const handleRoleToggle = async (targetUser: ManagedUser) => {
-    const nextRole = targetUser.role === 'admin' ? 'scambaiter' : 'admin';
-    try {
-      const res = await api.updateAdminUser(targetUser.id, { role: nextRole });
-      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? res.user : u)));
-      fetchUsers();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update user role');
+    if (targetUser.email.toLowerCase().trim() === 'cookiescambait@gmail.com') {
+      alert('cookiescambait@gmail.com is the permanent primary administrator.');
+      return;
     }
+    alert('Security Policy: cookiescambait@gmail.com is the only authorized administrator.');
   };
 
   const handleOpenResetPassword = (targetUser: ManagedUser) => {
