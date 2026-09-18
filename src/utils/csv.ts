@@ -48,7 +48,7 @@ export function generateCSV(scammers: Scammer[]): string {
       escapeCSV(toCanonicalStatus(s.status)),
       escapeCSV(s.targetValue ?? 0),
       escapeCSV(s.priority ?? 1),
-      escapeCSV(s.scamType || 'Tech Support'),
+      escapeCSV(s.scamType || 'Tech & Refund Scam'),
       escapeCSV(s.organization || ''),
       escapeCSV(s.carrier || ''),
       escapeCSV(s.location || ''),
@@ -226,7 +226,7 @@ export function parseScammersFromCSV(csvText: string): {
     const parsedPriority = Number(rawPriority.replace(/[^0-9]/g, '')) || 1;
     const priority = Math.min(3, Math.max(1, parsedPriority));
 
-    const scamType = getCol(row, ['Scam Type', 'Type', 'Category']) || 'Tech Support';
+    const scamType = getCol(row, ['Scam Type', 'Type', 'Category']) || 'Tech & Refund Scam';
     const organization = getCol(row, ['Organization', 'Company', 'Org', 'Enterprise']) || undefined;
     const alias = getCol(row, ['Alias', 'Moniker', 'Fake Name']) || undefined;
     const carrier = getCol(row, ['Carrier', 'Provider', 'VoIP Provider']) || undefined;
@@ -287,10 +287,10 @@ export function getSampleCSVTemplate(): string {
       fullName: 'Office Design Project (Alex Watson)',
       alias: 'David from Geek Squad Support',
       phoneNumber: '+1 (888) 529-8834',
-      status: 'New',
+      status: 'Uncalled',
       targetValue: 24000,
       priority: 2,
-      scamType: 'Tech Support',
+      scamType: 'Tech & Refund Scam',
       organization: 'Deco Addict',
       carrier: 'Bandwidth.com VoIP',
       location: 'Los Angeles DID / Kolkata',
@@ -311,7 +311,7 @@ export function getSampleCSVTemplate(): string {
       fullName: 'Interest in your products (Rahul Verma)',
       alias: 'Officer Robert Wilson #4092',
       phoneNumber: '+1 (844) 332-9011',
-      status: 'Qualified',
+      status: 'In Progress',
       targetValue: 2000,
       priority: 1,
       scamType: 'Federal Warrant & Asset Seizure',
@@ -335,7 +335,7 @@ export function getSampleCSVTemplate(): string {
       fullName: 'Open Space Design (James Miller)',
       alias: 'PayPal Fraud Agent',
       phoneNumber: '+1 (800) 419-7221',
-      status: 'Proposition',
+      status: 'Top Baits',
       targetValue: 11000,
       priority: 3,
       scamType: 'PayPal Invoice Fraud',

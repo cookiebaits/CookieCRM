@@ -7,6 +7,10 @@ export interface User {
 }
 
 export type PipelineStatus =
+  | 'Uncalled'
+  | 'In Progress'
+  | 'Top Baits'
+  | 'Reported / Down'
   | 'New'
   | 'Qualified'
   | 'Proposition'
@@ -16,16 +20,16 @@ export type PipelineStatus =
   | 'Payment Pending'
   | 'Revealed / Reported';
 
-export type CanonicalStatus = 'New' | 'Qualified' | 'Proposition' | 'Won';
+export type CanonicalStatus = 'Uncalled' | 'In Progress' | 'Top Baits' | 'Reported / Down';
 
 export function toCanonicalStatus(status?: string | null): CanonicalStatus {
-  if (!status) return 'New';
+  if (!status) return 'Uncalled';
   const s = status.trim().toLowerCase();
-  if (s === 'new' || s.includes('new')) return 'New';
-  if (s === 'qualified' || s.includes('qualif') || s.includes('bait')) return 'Qualified';
-  if (s === 'proposition' || s.includes('prop') || s.includes('payment') || s.includes('pend')) return 'Proposition';
-  if (s === 'won' || s.includes('won') || s.includes('reveal') || s.includes('report') || s.includes('close')) return 'Won';
-  return 'New';
+  if (s === 'uncalled' || s === 'new' || s.includes('uncall') || s.includes('lead') || s.includes('new')) return 'Uncalled';
+  if (s === 'in progress' || s === 'qualified' || s.includes('progress') || s.includes('qualif') || s.includes('bait')) return 'In Progress';
+  if (s === 'top baits' || s === 'proposition' || s.includes('top') || s.includes('prop') || s.includes('payment') || s.includes('pend')) return 'Top Baits';
+  if (s === 'reported / down' || s === 'won' || s.includes('won') || s.includes('reveal') || s.includes('report') || s.includes('down') || s.includes('close')) return 'Reported / Down';
+  return 'Uncalled';
 }
 
 export interface CallLog {

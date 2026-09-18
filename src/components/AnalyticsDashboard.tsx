@@ -395,27 +395,27 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onRefres
           </h4>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-slate-950 p-3 rounded-xl border border-sky-500/30">
-              <span className="text-xs text-sky-400 font-semibold block">1. New / Inbound</span>
+              <span className="text-xs text-sky-400 font-semibold block">1. Uncalled</span>
               <span className="text-2xl font-bold text-slate-100 font-mono">
-                {summary.pipelineCounts['New'] || summary.pipelineCounts['New Scammer'] || 0}
+                {summary.pipelineCounts['Uncalled'] || summary.pipelineCounts['New'] || summary.pipelineCounts['New Scammer'] || 0}
               </span>
             </div>
             <div className="bg-slate-950 p-3 rounded-xl border border-teal-500/30">
-              <span className="text-xs text-teal-400 font-semibold block">2. Qualified (Active Session)</span>
+              <span className="text-xs text-teal-400 font-semibold block">2. In Progress</span>
               <span className="text-2xl font-bold text-slate-100 font-mono">
-                {summary.pipelineCounts['Qualified'] || summary.pipelineCounts['Actively baiting'] || 0}
+                {summary.pipelineCounts['In Progress'] || summary.pipelineCounts['Qualified'] || summary.pipelineCounts['Actively baiting'] || 0}
               </span>
             </div>
             <div className="bg-slate-950 p-3 rounded-xl border border-amber-500/30">
-              <span className="text-xs text-amber-400 font-semibold block">3. Proposition (Pending)</span>
+              <span className="text-xs text-amber-400 font-semibold block">3. Top Baits</span>
               <span className="text-2xl font-bold text-slate-100 font-mono">
-                {summary.pipelineCounts['Proposition'] || summary.pipelineCounts['Payment Pending'] || 0}
+                {summary.pipelineCounts['Top Baits'] || summary.pipelineCounts['Proposition'] || summary.pipelineCounts['Payment Pending'] || 0}
               </span>
             </div>
             <div className="bg-slate-950 p-3 rounded-xl border border-emerald-500/30">
-              <span className="text-xs text-emerald-400 font-semibold block">4. Won (Neutralized)</span>
+              <span className="text-xs text-emerald-400 font-semibold block">4. Reported / Down</span>
               <span className="text-2xl font-bold text-slate-100 font-mono">
-                {summary.pipelineCounts['Won'] || summary.pipelineCounts['Revealed / Reported'] || 0}
+                {summary.pipelineCounts['Reported / Down'] || summary.pipelineCounts['Won'] || summary.pipelineCounts['Revealed / Reported'] || 0}
               </span>
             </div>
           </div>

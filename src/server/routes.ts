@@ -325,8 +325,8 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
         fullName: fullName.trim(),
         alias: alias ? alias.trim() : null,
         phoneNumber: phoneNumber.trim(),
-        status: status || 'New',
-        scamType: scamType || 'Tech Support',
+        status: status || 'Uncalled',
+        scamType: scamType || 'Tech & Refund Scam',
         organization: organization ? organization.trim() : null,
         notes: notes ? notes.trim() : null,
         totalTimeSpent: typeof totalTimeSpent === 'number' ? totalTimeSpent : Number(totalTimeSpent) || 0,
@@ -375,10 +375,10 @@ apiRouter.post('/scammers/bulk-import', requireAuth, async (req: AuthenticatedRe
             fullName: String(item.fullName).trim(),
             alias: item.alias ? String(item.alias).trim() : null,
             phoneNumber: String(item.phoneNumber).trim(),
-            status: item.status ? String(item.status).trim() : 'New',
+            status: item.status ? String(item.status).trim() : 'Uncalled',
             carrier: item.carrier ? String(item.carrier).trim() : null,
             location: item.location ? String(item.location).trim() : null,
-            scamType: item.scamType ? String(item.scamType).trim() : 'Tech Support',
+            scamType: item.scamType ? String(item.scamType).trim() : 'Tech & Refund Scam',
             organization: item.organization ? String(item.organization).trim() : null,
             flagged: Boolean(item.flagged === true || item.flagged === 'true' || item.flagged === '1' || item.flagged === 'TRUE'),
             dangerLevel: item.dangerLevel ? String(item.dangerLevel).toLowerCase().trim() : 'medium',
@@ -792,7 +792,7 @@ apiRouter.get('/analytics/monthly', requireAuth, async (req: AuthenticatedReques
     // Scam type breakdown
     const scamTypeMap: Record<string, { count: number; minutes: number }> = {};
     allScammers.forEach((s) => {
-      const type = s.scamType || 'Tech Support';
+      const type = s.scamType || 'Tech & Refund Scam';
       if (!scamTypeMap[type]) {
         scamTypeMap[type] = { count: 0, minutes: 0 };
       }

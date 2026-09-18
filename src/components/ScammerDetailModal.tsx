@@ -799,14 +799,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 font-medium"
                   >
-                    <option value="New">1. New (Lead / Incoming)</option>
-                    <option value="Qualified">2. Qualified (Active Session)</option>
-                    <option value="Proposition">3. Proposition (Payment Pending)</option>
-                    <option value="Won">4. Won (Neutralized / Reported)</option>
-                    <option value="New Scammer">New Scammer (Legacy)</option>
-                    <option value="Actively baiting">Actively baiting (Legacy)</option>
-                    <option value="Payment Pending">Payment Pending (Legacy)</option>
-                    <option value="Revealed / Reported">Revealed / Reported (Legacy)</option>
+                    <option value="Uncalled">1. Uncalled (Lead / Incoming)</option>
+                    <option value="In Progress">2. In Progress (Active Session)</option>
+                    <option value="Top Baits">3. Top Baits (Payment / High Interest)</option>
+                    <option value="Reported / Down">4. Reported / Down (Neutralized / Reported)</option>
+                    <option value="New">New (Legacy)</option>
+                    <option value="Qualified">Qualified (Legacy)</option>
+                    <option value="Proposition">Proposition (Legacy)</option>
+                    <option value="Won">Won (Legacy)</option>
                   </select>
                 </div>
 
@@ -832,31 +832,27 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Priority Rating */}
+                {/* Scam Type */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Priority Rating
+                    Scam Type Category
                   </label>
-                  <div className="flex items-center gap-2 h-9 px-3 bg-slate-950 border border-slate-800 rounded-xl">
-                    {[1, 2, 3].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => {
-                          setPriority(star);
-                          handleSaveScammerInfo({ priority: star });
-                        }}
-                        className="text-base transition hover:scale-125"
-                      >
-                        <span className={star <= priority ? 'text-amber-400' : 'text-slate-700'}>
-                          ★
-                        </span>
-                      </button>
-                    ))}
-                    <span className="text-[11px] text-slate-400 ml-2">
-                      {priority === 1 ? 'Standard' : priority === 2 ? 'High Interest' : 'Top Priority'}
-                    </span>
-                  </div>
+                  <select
+                    value={scamType}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setScamType(val);
+                      handleSaveScammerInfo({ scamType: val });
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-300 font-medium focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="Tech & Refund Scam">Tech & Refund Scam</option>
+                    <option value="Spellcaster / African Scam">Spellcaster / African Scam</option>
+                    <option value="Recovery Scam">Recovery Scam</option>
+                    <option value="Romance Scam">Romance Scam</option>
+                    <option value="Lottery / Sweepstakes Scam">Lottery / Sweepstakes Scam</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
 
                 {/* Danger Level */}

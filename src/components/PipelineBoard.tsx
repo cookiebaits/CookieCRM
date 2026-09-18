@@ -53,17 +53,17 @@ interface ColumnConfig {
 
 const CANONICAL_COLUMNS: ColumnConfig[] = [
   {
-    status: 'New',
-    title: 'New',
+    status: 'Uncalled',
+    title: 'Uncalled',
     badgeClass: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
     barColor: 'bg-sky-500',
     borderColor: 'border-sky-500/40',
     accentColor: '#0284c7',
-    description: 'Initial leads & unverified inbound calls',
+    description: 'Initial leads & uncalled target numbers',
   },
   {
-    status: 'Qualified',
-    title: 'Qualified',
+    status: 'In Progress',
+    title: 'In Progress',
     badgeClass: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
     barColor: 'bg-teal-500',
     borderColor: 'border-teal-500/40',
@@ -71,22 +71,22 @@ const CANONICAL_COLUMNS: ColumnConfig[] = [
     description: 'Active bait sessions & honeypot VM engaged',
   },
   {
-    status: 'Proposition',
-    title: 'Proposition',
+    status: 'Top Baits',
+    title: 'Top Baits',
     badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     barColor: 'bg-amber-500',
     borderColor: 'border-amber-500/40',
     accentColor: '#f59e0b',
-    description: 'Wire transfer, check deposit or card bait pending',
+    description: 'High-value targets & active long duration baits',
   },
   {
-    status: 'Won',
-    title: 'Won',
+    status: 'Reported / Down',
+    title: 'Reported / Down',
     badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     barColor: 'bg-emerald-500',
     borderColor: 'border-emerald-500/40',
     accentColor: '#10b981',
-    description: 'Scam neutralized, bank accounts frozen & reported',
+    description: 'Scam neutralized, number taken down & reported',
   },
 ];
 
@@ -119,16 +119,16 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
 
   // Odoo Column Folding state (e.g. folding/collapsing a column into a slim vertical strip)
   const [foldedColumns, setFoldedColumns] = useState<Record<CanonicalStatus, boolean>>({
-    New: false,
-    Qualified: false,
-    Proposition: false,
-    Won: false,
+    Uncalled: false,
+    'In Progress': false,
+    'Top Baits': false,
+    'Reported / Down': false,
   });
 
   // Odoo Inline Quick Add state (opening an inline creation card directly at the top of a column)
   const [inlineAddingCol, setInlineAddingCol] = useState<CanonicalStatus | null>(null);
   const [inlineTitle, setInlineTitle] = useState('');
-  const [inlineScamType, setInlineScamType] = useState('Tech Support');
+  const [inlineScamType, setInlineScamType] = useState('Tech & Refund Scam');
   const [inlineDuration, setInlineDuration] = useState('30');
   const [inlinePhone, setInlinePhone] = useState('');
   const [inlineOrg, setInlineOrg] = useState('');
@@ -173,10 +173,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
   // Group filtered scammers by canonical status
   const groupedByStatus = useMemo(() => {
     const groups: Record<CanonicalStatus, Scammer[]> = {
-      New: [],
-      Qualified: [],
-      Proposition: [],
-      Won: [],
+      Uncalled: [],
+      'In Progress': [],
+      'Top Baits': [],
+      'Reported / Down': [],
     };
 
     filteredScammers.forEach((s) => {
@@ -184,7 +184,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
       if (groups[canonical]) {
         groups[canonical].push(s);
       } else {
-        groups.New.push(s);
+        groups.Uncalled.push(s);
       }
     });
 
@@ -321,7 +321,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
           inlinePhone.trim() ||
           `+1 (${Math.floor(800 + Math.random() * 99)}) ${Math.floor(100 + Math.random() * 899)}-${Math.floor(1000 + Math.random() * 8999)}`,
         status: colStatus,
-        scamType: inlineScamType || 'Tech Support',
+        scamType: inlineScamType || 'Tech & Refund Scam',
         totalTimeSpent: initialMinutes,
         organization: inlineOrg.trim() || undefined,
         priority: inlinePriority,
@@ -335,7 +335,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
       setInlineTitle('');
       setInlinePhone('');
       setInlineOrg('');
-      setInlineScamType('Tech Support');
+      setInlineScamType('Tech & Refund Scam');
       setInlineDuration('30');
       setInlinePriority(2);
       setInlineAddingCol(null);
@@ -357,7 +357,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
             <button
               type="button"
               id="odoo-new-opportunity-btn"
-              onClick={() => onQuickAdd('New')}
+              onClick={() => onQuickAdd('Uncalled')}
               className="px-3.5 py-2 rounded-lg bg-[#714B67] hover:bg-[#5f3d56] text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-purple-950/30 transition hover:scale-[1.02] active:scale-[0.98] tracking-wide shrink-0"
             >
               <Plus className="w-4 h-4" />
@@ -454,7 +454,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
             <div className="hidden lg:flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
               {[
                 { id: 'all', label: 'All Targets' },
-                { id: 'Tech Support', label: 'Tech Support' },
+                { id: 'Tech & Refund Scam', label: 'Tech & Refund' },
                 { id: 'flagged', label: 'Flagged' },
                 { id: 'audio', label: 'Audio Proof' },
               ].map((chip) => (
@@ -627,7 +627,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             setInlineTitle('');
                             setInlinePhone('');
                             setInlineOrg('');
-                            setInlineScamType('Tech Support');
+                            setInlineScamType('Tech & Refund Scam');
                             setInlineDuration('30');
                             setInlinePriority(2);
                             setInlineError(null);
@@ -730,12 +730,12 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             onChange={(e) => setInlineScamType(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-amber-300 focus:outline-none focus:border-[#714B67]"
                           >
-                            <option value="Tech Support">Tech Support</option>
-                            <option value="Refund Scam">Refund Scam</option>
-                            <option value="IRS / Govt">IRS / Govt</option>
-                            <option value="Crypto Investment">Crypto Investment</option>
-                            <option value="Gift Card">Gift Card</option>
-                            <option value="Bank Impersonation">Bank Impersonation</option>
+                            <option value="Tech & Refund Scam">Tech & Refund Scam</option>
+                            <option value="Spellcaster / African Scam">Spellcaster / African Scam</option>
+                            <option value="Recovery Scam">Recovery Scam</option>
+                            <option value="Romance Scam">Romance Scam</option>
+                            <option value="Lottery / Sweepstakes Scam">Lottery / Sweepstakes Scam</option>
+                            <option value="Other">Other</option>
                           </select>
                         </div>
                         <div>
@@ -958,10 +958,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                     className="bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-[9px] text-slate-300 hover:text-white cursor-pointer focus:outline-none"
                                     title="Move stage"
                                   >
-                                    <option value="New">New</option>
-                                    <option value="Qualified">Qualified</option>
-                                    <option value="Proposition">Proposition</option>
-                                    <option value="Won">Won</option>
+                                    <option value="Uncalled">Uncalled</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Top Baits">Top Baits</option>
+                                    <option value="Reported / Down">Reported / Down</option>
                                   </select>
                                 </div>
                               </div>
@@ -1036,11 +1036,11 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                         <td className="px-4 py-3">
                           <span
                             className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
-                              canonical === 'New'
+                              canonical === 'Uncalled'
                                 ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
-                                : canonical === 'Qualified'
+                                : canonical === 'In Progress'
                                 ? 'bg-teal-500/20 text-teal-300 border-teal-500/30'
-                                : canonical === 'Proposition'
+                                : canonical === 'Top Baits'
                                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                                 : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                             }`}
@@ -1084,7 +1084,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                         </td>
 
                         <td className="px-4 py-3 text-slate-300 font-medium">
-                          {scammer.scamType || 'Tech Support'}
+                          {scammer.scamType || 'Tech & Refund Scam'}
                         </td>
 
                         <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -1095,10 +1095,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             }
                             className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 cursor-pointer focus:outline-none"
                           >
-                            <option value="New">New</option>
-                            <option value="Qualified">Qualified</option>
-                            <option value="Proposition">Proposition</option>
-                            <option value="Won">Won</option>
+                            <option value="Uncalled">Uncalled</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Top Baits">Top Baits</option>
+                            <option value="Reported / Down">Reported / Down</option>
                           </select>
                         </td>
                       </tr>
