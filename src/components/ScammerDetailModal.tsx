@@ -18,10 +18,12 @@ import {
   DollarSign,
   Copy,
   ChevronLeft,
+  Calendar,
 } from 'lucide-react';
 import { api } from '../api.ts';
 import { AudioPlayerWidget } from './AudioPlayerWidget.tsx';
 import { CallTimerWidget } from './CallTimerWidget.tsx';
+import { formatFinancialImpact, getWastedRatePerMin } from '../utils/financial.ts';
 import type { Scammer, PipelineStatus, CarrierIntel } from '../types.ts';
 
 interface ScammerDetailModalProps {
@@ -57,6 +59,57 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   // Manual Time Editing
   const [isEditingTotalTime, setIsEditingTotalTime] = useState(false);
   const [manualTimeMinutes, setManualTimeMinutes] = useState<number>(scammer.totalTimeSpent || 0);
+  const [quickCallMinutes, setQuickCallMinutes] = useState<string>('30');
+
+  // Compute call duration breakdown grouped by date
+  const dateBreakdown = React.useMemo(() => {
+    const map: Record<string, { minutes: number; count: number; rawDate: Date }> = {};
+    (scammer.calls || []).forEach((call) => {
+      const d = new Date(call.date || Date.now());
+      const dateKey = d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      if (!map[dateKey]) {
+        map[dateKey] = { minutes: 0, count: 0, rawDate: d };
+      }
+      map[dateKey].minutes += call.duration || 0;
+      map[dateKey].count += 1;
+    });
+    return Object.entries(map)
+      .map(([dateStr, info]) => ({
+        dateStr,
+        minutes: info.minutes,
+        count: info.count,
+        rawDate: info.rawDate,
+      }))
+      .sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+  }, [scammer.calls]);
+
+  // Quick add call time from top banner
+  const handleQuickAddCall = async () => {
+    const mins = parseInt(quickCallMinutes, 10);
+    if (isNaN(mins) || mins <= 0) return;
+
+    try {
+      const res = await api.addCall(scammer.id, {
+        durationMinutes: mins,
+        notes: `Quick call log (${mins} mins)`,
+      });
+      const updatedCalls = [res.call, ...(scammer.calls || [])];
+      const updatedScammer: Scammer = {
+        ...scammer,
+        calls: updatedCalls,
+        totalTimeSpent: res.scammerTotalMinutes,
+        todayTimeSpent: res.todayMinutes,
+      };
+      onUpdateScammer(updatedScammer);
+      setQuickCallMinutes('');
+    } catch (err) {
+      console.error('Failed to add quick call time:', err);
+    }
+  };
 
   // Call log form
   const [showAddCall, setShowAddCall] = useState(false);
@@ -465,16 +518,84 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
       {/* Main Single-Page Scrollable Workspace Container */}
       <div className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Live Call Stopwatch Bar */}
-        <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl">
-          <CallTimerWidget
-            scammerName={scammer.fullName}
-            onLogCompletedCall={(minutes) => {
-              setCallDuration(minutes);
-              setShowAddCall(true);
-              scrollToSection('section-calls');
-            }}
-          />
+        {/* Total Call Time & Quick Time Input Banner */}
+        <div className="p-5 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  Total Call Time
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Target: <span className="text-slate-200 font-semibold">{scammer.fullName || scammer.phoneNumber}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Minute Input & Add Button */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Mins spoken today"
+                  value={quickCallMinutes}
+                  onChange={(e) => setQuickCallMinutes(e.target.value)}
+                  className="w-44 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
+                />
+                <span className="absolute right-2.5 top-2 text-xs text-slate-500 font-mono">min</span>
+              </div>
+              <button
+                type="button"
+                id="quick-add-call-btn"
+                onClick={handleQuickAddCall}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add</span>
+              </button>
+
+              {/* Prominent Total Call Time Display */}
+              <div className="ml-2 px-4 py-1.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-medium">Total:</span>
+                <span className="font-mono text-sm font-bold text-emerald-400">
+                  {scammer.totalTimeSpent || 0} mins ({((scammer.totalTimeSpent || 0) / 60).toFixed(1)} hrs)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Dates Breakdown Section */}
+          <div className="pt-3 border-t border-slate-800/80">
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Call Time Spent by Date
+              </span>
+            </div>
+
+            {dateBreakdown.length === 0 ? (
+              <p className="text-xs text-slate-500 italic">
+                No call time logged yet. Enter minutes above and click &quot;Add&quot;.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {dateBreakdown.map((item) => (
+                  <div
+                    key={item.dateStr}
+                    className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2 text-xs"
+                  >
+                    <span className="font-semibold text-slate-300">{item.dateStr}:</span>
+                    <span className="font-bold font-mono text-amber-400">{item.minutes} mins</span>
+                    <span className="text-[10px] text-slate-500">({item.count} {item.count === 1 ? 'call' : 'calls'})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Quick Section Anchor Navigation Header */}
@@ -610,25 +731,30 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-xl font-bold text-slate-100">
-                      {scammer.totalTimeSpent} mins{' '}
-                      <span className="text-xs font-normal text-slate-400">
-                        ({(scammer.totalTimeSpent / 60).toFixed(1)} hrs)
-                      </span>
+                  <div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xl font-bold text-slate-100">
+                        {scammer.totalTimeSpent} mins{' '}
+                        <span className="text-xs font-normal text-slate-400">
+                          ({(scammer.totalTimeSpent / 60).toFixed(1)} hrs)
+                        </span>
+                      </p>
+                      <button
+                        type="button"
+                        id="edit-total-time-btn"
+                        onClick={() => {
+                          setManualTimeMinutes(scammer.totalTimeSpent || 0);
+                          setIsEditingTotalTime(true);
+                        }}
+                        className="p-1 text-slate-400 hover:text-amber-400 rounded bg-slate-900 border border-slate-800 cursor-pointer"
+                        title="Manually set total time wasted"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <p className="text-[11px] font-semibold text-emerald-400 mt-0.5">
+                      Est. {formatFinancialImpact(scamType, scammer.totalTimeSpent)} wasted ({getWastedRatePerMin(scamType) === 0.15 ? '$0.15' : '$0.10'}/min)
                     </p>
-                    <button
-                      type="button"
-                      id="edit-total-time-btn"
-                      onClick={() => {
-                        setManualTimeMinutes(scammer.totalTimeSpent || 0);
-                        setIsEditingTotalTime(true);
-                      }}
-                      className="p-1 text-slate-400 hover:text-amber-400 rounded bg-slate-900 border border-slate-800 cursor-pointer"
-                      title="Manually set total time wasted"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                    </button>
                   </div>
                 )}
               </div>
@@ -917,7 +1043,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Pipeline Stage */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -932,6 +1058,30 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 <option value="In Progress">2. In Progress (Actively Baiting)</option>
                 <option value="Top Baits">3. Top Baits (Payment Pending / High Value)</option>
                 <option value="Reported / Down">4. Reported / Down (Neutralized)</option>
+              </select>
+            </div>
+
+            {/* Scam Type */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Scam Category / Type
+              </label>
+              <select
+                value={scamType || 'Tech Support / Refund Scams'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setScamType(val);
+                  handleSaveScammerInfo({ scamType: val });
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-300 font-semibold focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="Tech Support / Refund Scams">Tech Support / Refund Scams</option>
+                <option value="IRS & Govt.">IRS & Govt.</option>
+                <option value="Crypto Investments / Bank Impersonator">Crypto Investments / Bank Impersonator</option>
+                <option value="Lottery / Sweepstakes">Lottery / Sweepstakes</option>
+                <option value="Pet / Gun">Pet / Gun</option>
+                <option value="Spellcaster">Spellcaster</option>
+                <option value="Others">Others</option>
               </select>
             </div>
 

@@ -128,7 +128,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
   // Odoo Inline Quick Add state (opening an inline creation card directly at the top of a column)
   const [inlineAddingCol, setInlineAddingCol] = useState<CanonicalStatus | null>(null);
   const [inlineTitle, setInlineTitle] = useState('');
-  const [inlineScamType, setInlineScamType] = useState('Tech Support');
+  const [inlineScamType, setInlineScamType] = useState('Tech Support / Refund Scams');
   const [inlineDuration, setInlineDuration] = useState('30');
   const [inlinePhone, setInlinePhone] = useState('');
   const [inlineOrg, setInlineOrg] = useState('');
@@ -321,7 +321,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
           inlinePhone.trim() ||
           `+1 (${Math.floor(800 + Math.random() * 99)}) ${Math.floor(100 + Math.random() * 899)}-${Math.floor(1000 + Math.random() * 8999)}`,
         status: colStatus,
-        scamType: inlineScamType || 'Tech Support',
+        scamType: inlineScamType || 'Tech Support / Refund Scams',
         totalTimeSpent: initialMinutes,
         organization: inlineOrg.trim() || undefined,
         priority: inlinePriority,
@@ -730,12 +730,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             onChange={(e) => setInlineScamType(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-amber-300 focus:outline-none focus:border-[#714B67]"
                           >
-                            <option value="Tech Support">Tech Support</option>
-                            <option value="Refund Scam">Refund Scam</option>
-                            <option value="IRS / Govt">IRS / Govt</option>
-                            <option value="Crypto Investment">Crypto Investment</option>
-                            <option value="Gift Card">Gift Card</option>
-                            <option value="Bank Impersonation">Bank Impersonation</option>
+                            <option value="Tech Support / Refund Scams">Tech Support / Refund Scams</option>
+                            <option value="IRS & Govt.">IRS & Govt.</option>
+                            <option value="Crypto Investments / Bank Impersonator">Crypto Investments / Bank Impersonator</option>
+                            <option value="Lottery / Sweepstakes">Lottery / Sweepstakes</option>
+                            <option value="Pet / Gun">Pet / Gun</option>
+                            <option value="Spellcaster">Spellcaster</option>
+                            <option value="Others">Others</option>
                           </select>
                         </div>
                         <div>

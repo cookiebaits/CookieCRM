@@ -15,7 +15,62 @@
       "updatedAt": "2026-09-18T07:44:34.365Z"
     }
   ],
-  "scammers": [],
-  "callLogs": [],
+  "scammers": [
+    {
+      "id": "500c7324-f2bf-4c07-bcb7-dff4ad563117",
+      "fullName": "Mike Henry",
+      "alias": null,
+      "phoneNumber": "+1 (855) 816-7881",
+      "status": "New",
+      "carrier": null,
+      "location": null,
+      "scamType": "Tech Support / Refund Scams",
+      "organization": null,
+      "flagged": false,
+      "dangerLevel": "medium",
+      "victimGivenInfo": null,
+      "remoteAccessId": null,
+      "ipAddress": null,
+      "notes": null,
+      "totalTimeSpent": 45,
+      "targetValue": 0,
+      "priority": 2,
+      "createdAt": "2026-09-18T19:57:31.856Z",
+      "updatedAt": "2026-09-18T19:57:58.914Z",
+      "userId": "66ce8104-7af3-4d7f-a188-20517ea7f7b1",
+      "calls": [],
+      "fraudAccounts": []
+    }
+  ],
+  "callLogs": [
+    {
+      "id": "c7a7940d-de74-44ef-b495-75fc1864ea9b",
+      "scammerId": "500c7324-f2bf-4c07-bcb7-dff4ad563117",
+      "date": "2026-09-18T19:57:34.285Z",
+      "durationMinutes": 20,
+      "notes": "Quick call log (20 mins)",
+      "audioRecordingUrl": null,
+      "audioRecordingName": null,
+      "victimPersonaUsed": null,
+      "infoGiven": null,
+      "outcome": null,
+      "createdAt": "2026-09-18T19:57:34.285Z",
+      "updatedAt": "2026-09-18T19:57:34.285Z"
+    },
+    {
+      "id": "3a38091a-e23c-44fa-9539-8f892c6bd7aa",
+      "scammerId": "500c7324-f2bf-4c07-bcb7-dff4ad563117",
+      "date": "2026-09-18T19:57:58.914Z",
+      "durationMinutes": 25,
+      "notes": "Quick call log (25 mins)",
+      "audioRecordingUrl": null,
+      "audioRecordingName": null,
+      "victimPersonaUsed": null,
+      "infoGiven": null,
+      "outcome": null,
+      "createdAt": "2026-09-18T19:57:58.914Z",
+      "updatedAt": "2026-09-18T19:57:58.914Z"
+    }
+  ],
   "fraudAccounts": []
 }
