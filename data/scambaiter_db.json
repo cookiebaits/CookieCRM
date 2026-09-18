@@ -15,33 +15,7 @@
       "updatedAt": "2026-09-18T07:44:34.365Z"
     }
   ],
-  "scammers": [
-    {
-      "id": "d9691e6d-a2b1-4067-a5ba-ff254b345e57",
-      "fullName": "rwafdwa (Tech & Refund Center)",
-      "alias": null,
-      "phoneNumber": "+1 (847) 926-5181",
-      "status": "New",
-      "carrier": "VoIP / Cloud Provider (Unverified) (VoIP / Virtual Line)",
-      "location": "North America / Toll-Free",
-      "scamType": "Tech Support",
-      "organization": null,
-      "flagged": false,
-      "dangerLevel": "medium",
-      "victimGivenInfo": null,
-      "remoteAccessId": null,
-      "ipAddress": null,
-      "notes": "AI Intel: Automated offline analysis: Number format matches typical VoIP/virtual routing used by call center scams.",
-      "totalTimeSpent": 0,
-      "targetValue": 5000,
-      "priority": 2,
-      "createdAt": "2026-09-18T07:44:52.694Z",
-      "updatedAt": "2026-09-18T07:44:52.776Z",
-      "userId": "66ce8104-7af3-4d7f-a188-20517ea7f7b1",
-      "calls": [],
-      "fraudAccounts": []
-    }
-  ],
+  "scammers": [],
   "callLogs": [],
   "fraudAccounts": []
 }

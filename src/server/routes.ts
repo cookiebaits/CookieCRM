@@ -435,6 +435,7 @@ apiRouter.put('/scammers/:id', requireAuth, async (req, res) => {
       notes,
       targetValue,
       priority,
+      totalTimeSpent,
     } = req.body;
 
     const updated = await db.scammer.update({
@@ -456,6 +457,7 @@ apiRouter.put('/scammers/:id', requireAuth, async (req, res) => {
         ...(notes !== undefined && { notes }),
         ...(targetValue !== undefined && { targetValue: Number(targetValue) || 0 }),
         ...(priority !== undefined && { priority: Number(priority) || 1 }),
+        ...(totalTimeSpent !== undefined && { totalTimeSpent: Number(totalTimeSpent) || 0 }),
       },
       include: {
         calls: { orderBy: { date: 'desc' } },

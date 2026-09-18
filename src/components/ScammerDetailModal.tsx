@@ -12,20 +12,17 @@ import {
   Trash2,
   Edit2,
   Check,
-  Building,
-  Globe,
   Radio,
   FileSpreadsheet,
   MessageSquare,
   DollarSign,
   Copy,
-  ExternalLink,
   ChevronLeft,
 } from 'lucide-react';
 import { api } from '../api.ts';
 import { AudioPlayerWidget } from './AudioPlayerWidget.tsx';
 import { CallTimerWidget } from './CallTimerWidget.tsx';
-import type { Scammer, CallLog, FraudAccount, PipelineStatus, CarrierIntel } from '../types.ts';
+import type { Scammer, PipelineStatus, CarrierIntel } from '../types.ts';
 
 interface ScammerDetailModalProps {
   scammer: Scammer;
@@ -42,8 +39,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   onUpdateScammer,
   onDeleteScammer,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'calls' | 'victim_info' | 'fraud_accounts' | 'ai_copilot'>('calls');
-
   // Edit fields
   const [status, setStatus] = useState<PipelineStatus>(scammer.status);
   const [flagged, setFlagged] = useState<boolean>(scammer.flagged);
@@ -58,6 +53,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [ipAddress, setIpAddress] = useState(scammer.ipAddress || '');
   const [victimGivenInfo, setVictimGivenInfo] = useState(scammer.victimGivenInfo || '');
   const [notes, setNotes] = useState(scammer.notes || '');
+
+  // Manual Time Editing
+  const [isEditingTotalTime, setIsEditingTotalTime] = useState(false);
+  const [manualTimeMinutes, setManualTimeMinutes] = useState<number>(scammer.totalTimeSpent || 0);
 
   // Call log form
   const [showAddCall, setShowAddCall] = useState(false);
@@ -106,6 +105,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         ipAddress,
         victimGivenInfo,
         notes,
+        totalTimeSpent: scammer.totalTimeSpent,
         ...fieldOverrides,
       };
       const res = await api.updateScammer(scammer.id, payload);
@@ -113,6 +113,25 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     } catch (err) {
       console.error('Save scammer error:', err);
     }
+  };
+
+  // Manual update of total time wasted
+  const handleSaveManualTotalTime = async () => {
+    try {
+      const newMinutes = Math.max(0, manualTimeMinutes);
+      await handleSaveScammerInfo({ totalTimeSpent: newMinutes });
+      onUpdateScammer({ ...scammer, totalTimeSpent: newMinutes });
+      setIsEditingTotalTime(false);
+    } catch (err) {
+      console.error('Manual time save error:', err);
+    }
+  };
+
+  const handleQuickAddMinutes = async (addedMins: number) => {
+    const updatedMins = (scammer.totalTimeSpent || 0) + addedMins;
+    setManualTimeMinutes(updatedMins);
+    await handleSaveScammerInfo({ totalTimeSpent: updatedMins });
+    onUpdateScammer({ ...scammer, totalTimeSpent: updatedMins });
   };
 
   // Status change handler
@@ -276,7 +295,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     try {
       const res = await api.deleteCall(scammer.id, callId);
       const updatedCalls = scammer.calls.filter((c) => c.id !== callId);
-      // Recalculate today's time
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayMinutes = updatedCalls
@@ -343,6 +361,13 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
+  const scrollToSection = (sectionId: string) => {
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 overflow-y-auto flex flex-col min-h-screen w-full animate-fadeIn">
       {/* Top Header Navigation Bar */}
@@ -406,7 +431,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 Today: {scammer.todayTimeSpent || 0}m
               </span>
               <span className="text-slate-600">&bull;</span>
-              <span className="text-slate-300 font-mono font-bold">Total: {scammer.totalTimeSpent}m</span>
+              <span className="text-slate-300 font-mono font-bold">
+                Total: {scammer.totalTimeSpent}m
+              </span>
             </div>
 
             <button
@@ -436,7 +463,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         </div>
       </div>
 
-      {/* Main Full Page Workspace Container */}
+      {/* Main Single-Page Scrollable Workspace Container */}
       <div className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Live Call Stopwatch Bar */}
         <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl">
@@ -445,902 +472,970 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             onLogCompletedCall={(minutes) => {
               setCallDuration(minutes);
               setShowAddCall(true);
-              setActiveTab('calls');
+              scrollToSection('section-calls');
             }}
           />
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-800 bg-slate-900/60 rounded-2xl p-1.5 gap-2 overflow-x-auto text-xs border">
+        {/* Quick Section Anchor Navigation Header */}
+        <div className="flex border-b border-slate-800 bg-slate-900/80 rounded-2xl p-2 gap-2 overflow-x-auto text-xs border sticky top-[68px] z-20 backdrop-blur-md shadow-md">
           <button
             type="button"
-            onClick={() => setActiveTab('calls')}
-            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'calls'
-                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
+            onClick={() => scrollToSection('section-calls')}
+            className="py-2 px-3.5 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
           >
-            <Clock className="w-4 h-4" />
+            <Clock className="w-4 h-4 text-rose-400" />
             <span>Call Logs & Recordings ({scammer.calls.length})</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('overview')}
-            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'overview'
-                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
+            onClick={() => scrollToSection('section-telecom')}
+            className="py-2 px-3.5 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
           >
-            <Radio className="w-4 h-4" />
+            <Radio className="w-4 h-4 text-amber-400" />
             <span>Telecom & Profile</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('victim_info')}
-            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'victim_info'
-                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
+            onClick={() => scrollToSection('section-victim')}
+            className="py-2 px-3.5 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
           >
-            <Shield className="w-4 h-4" />
+            <Shield className="w-4 h-4 text-emerald-400" />
             <span>Victim Given Info</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('fraud_accounts')}
-            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'fraud_accounts'
-                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
+            onClick={() => scrollToSection('section-fraud')}
+            className="py-2 px-3.5 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
           >
-            <DollarSign className="w-4 h-4" />
+            <DollarSign className="w-4 h-4 text-rose-400" />
             <span>Fraud Accounts ({scammer.fraudAccounts.length})</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('ai_copilot')}
-            className={`py-2.5 px-4 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'ai_copilot'
-                ? 'bg-amber-600 text-white shadow-lg shadow-amber-950/40'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
+            onClick={() => scrollToSection('section-ai')}
+            className="py-2 px-3.5 font-bold rounded-xl transition whitespace-nowrap flex items-center gap-2 text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
             <span>Gemini AI Copilot</span>
           </button>
         </div>
 
-        {/* Page Content Panel */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-6 backdrop-blur-sm">
-          {/* TAB 1: CALL LOGS & RECORDINGS */}
-          {activeTab === 'calls' && (
-            <div className="space-y-4">
-              {/* Dynamic Call Time Summary Banner */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                      Today&apos;s Time Spent
-                    </p>
-                    <p className="text-xl font-bold text-emerald-400 mt-0.5">
-                      {scammer.todayTimeSpent || 0} mins
-                    </p>
-                  </div>
-                  <Clock className="w-6 h-6 text-emerald-500/40" />
-                </div>
+        {/* Dynamic Time Summary Banner with Manual Time Controls */}
+        <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-200 uppercase tracking-wider">
+              <Clock className="w-4 h-4 text-emerald-400" />
+              <span>Time Wasted & Engagement Tracker</span>
+            </div>
 
-                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                      Total Time Wasted
-                    </p>
-                    <p className="text-xl font-bold text-slate-100 mt-0.5">
+            {/* Manual Time Quick Buttons */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-400 text-[11px]">Quick Add Time:</span>
+              <button
+                type="button"
+                id="quick-add-15m-btn"
+                onClick={() => handleQuickAddMinutes(15)}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-mono text-xs font-bold border border-slate-700 cursor-pointer transition"
+              >
+                +15m
+              </button>
+              <button
+                type="button"
+                id="quick-add-30m-btn"
+                onClick={() => handleQuickAddMinutes(30)}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-mono text-xs font-bold border border-slate-700 cursor-pointer transition"
+              >
+                +30m
+              </button>
+              <button
+                type="button"
+                id="quick-add-60m-btn"
+                onClick={() => handleQuickAddMinutes(60)}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-mono text-xs font-bold border border-slate-700 cursor-pointer transition"
+              >
+                +1h
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">
+                  Today&apos;s Time Spent
+                </p>
+                <p className="text-xl font-bold text-emerald-400 mt-0.5">
+                  {scammer.todayTimeSpent || 0} mins
+                </p>
+              </div>
+              <Clock className="w-6 h-6 text-emerald-500/40" />
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">
+                  Total Time Wasted
+                </p>
+                {isEditingTotalTime ? (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <input
+                      type="number"
+                      min="0"
+                      id="input-manual-total-time"
+                      value={manualTimeMinutes}
+                      onChange={(e) => setManualTimeMinutes(parseInt(e.target.value) || 0)}
+                      className="w-20 bg-slate-900 border border-emerald-500 rounded px-2 py-0.5 text-sm text-white font-mono"
+                    />
+                    <span className="text-xs text-slate-400">mins</span>
+                    <button
+                      type="button"
+                      id="save-manual-time-btn"
+                      onClick={handleSaveManualTotalTime}
+                      className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-500 cursor-pointer"
+                      title="Save total minutes"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTotalTime(false)}
+                      className="p-1 bg-slate-800 text-slate-400 rounded hover:text-white cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-xl font-bold text-slate-100">
                       {scammer.totalTimeSpent} mins{' '}
                       <span className="text-xs font-normal text-slate-400">
                         ({(scammer.totalTimeSpent / 60).toFixed(1)} hrs)
                       </span>
                     </p>
-                  </div>
-                  <Radio className="w-6 h-6 text-rose-500/40" />
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                      Interactions Logged
-                    </p>
-                    <p className="text-xl font-bold text-amber-400 mt-0.5">
-                      {scammer.calls.length} calls
-                    </p>
-                  </div>
-                  <MessageSquare className="w-6 h-6 text-amber-500/40" />
-                </div>
-              </div>
-
-              {/* Add Call Button & Form */}
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-slate-200">Call Log History</h4>
-                <button
-                  type="button"
-                  id="toggle-add-call-btn"
-                  onClick={() => setShowAddCall(!showAddCall)}
-                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {showAddCall ? 'Cancel Form' : 'Log New Call & Audio'}
-                </button>
-              </div>
-
-              {showAddCall && (
-                <form
-                  onSubmit={handleAddCallLog}
-                  className="bg-slate-950 border border-rose-500/30 rounded-xl p-4 space-y-3"
-                >
-                  <div className="font-semibold text-xs text-rose-400 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4" />
-                    New Call Log Entry
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                        Call Duration (Minutes)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        id="input-call-duration"
-                        value={callDuration}
-                        onChange={(e) => setCallDuration(parseInt(e.target.value) || 0)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                        Victim Persona Used
-                      </label>
-                      <input
-                        type="text"
-                        id="input-call-persona"
-                        placeholder="e.g. Grandma Gertrude, Arthur the Teacher"
-                        value={callPersona}
-                        onChange={(e) => setCallPersona(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                      Call Notes & Narrative
-                    </label>
-                    <textarea
-                      rows={2}
-                      id="input-call-notes"
-                      placeholder="What happened during this call? What lies did the scammer tell?"
-                      value={callNotes}
-                      onChange={(e) => setCallNotes(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                        Victim Info Fed to Scammer
-                      </label>
-                      <input
-                        type="text"
-                        id="input-call-info-given"
-                        placeholder="e.g. Fake routing number, bogus Target card code"
-                        value={callInfoGiven}
-                        onChange={(e) => setCallInfoGiven(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                        Call Outcome
-                      </label>
-                      <input
-                        type="text"
-                        id="input-call-outcome"
-                        placeholder="e.g. Connected to VM, scammer hung up furious"
-                        value={callOutcome}
-                        onChange={(e) => setCallOutcome(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Audio Upload Input */}
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                      Attach Call Audio Recording (.wav, .mp3)
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition border border-slate-700">
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Choose Audio File</span>
-                        <input
-                          type="file"
-                          accept="audio/*"
-                          onChange={handleAudioUpload}
-                          className="hidden"
-                        />
-                      </label>
-                      <span className="text-xs text-slate-400 truncate">
-                        {audioFileName || 'No recording chosen'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
                     <button
                       type="button"
-                      onClick={() => setShowAddCall(false)}
-                      className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+                      id="edit-total-time-btn"
+                      onClick={() => {
+                        setManualTimeMinutes(scammer.totalTimeSpent || 0);
+                        setIsEditingTotalTime(true);
+                      }}
+                      className="p-1 text-slate-400 hover:text-amber-400 rounded bg-slate-900 border border-slate-800 cursor-pointer"
+                      title="Manually set total time wasted"
                     >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      id="save-call-entry-btn"
-                      className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition"
-                    >
-                      Save Call Log
+                      <Edit2 className="w-3 h-3" />
                     </button>
                   </div>
-                </form>
-              )}
-
-              {/* Calls List */}
-              <div className="space-y-3">
-                {scammer.calls.length === 0 ? (
-                  <div className="text-center py-8 bg-slate-950/40 rounded-xl border border-slate-800 text-slate-400 text-xs">
-                    No calls recorded yet. Use the Live Stopwatch above or click &quot;Log New Call&quot;.
-                  </div>
-                ) : (
-                  scammer.calls.map((call) => (
-                    <div
-                      key={call.id}
-                      className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3 hover:border-slate-700 transition"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
-                        <div className="flex items-center gap-3">
-                          {/* Duration Badge with Inline Dynamic Editor */}
-                          {editingCallId === call.id ? (
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="number"
-                                min="0"
-                                value={editingDuration}
-                                onChange={(e) => setEditingDuration(parseInt(e.target.value) || 0)}
-                                className="w-16 bg-slate-900 border border-rose-500 rounded px-2 py-0.5 text-xs text-white"
-                              />
-                              <span className="text-xs text-slate-400">min</span>
-                              <button
-                                type="button"
-                                onClick={() => handleSaveCallDuration(call.id)}
-                                className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-500"
-                                title="Save new duration"
-                              >
-                                <Check className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingCallId(null)}
-                                className="p-1 bg-slate-800 text-slate-400 rounded hover:text-white"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 font-bold font-mono text-xs border border-rose-500/30">
-                                {call.durationMinutes} mins
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingCallId(call.id);
-                                  setEditingDuration(call.durationMinutes);
-                                }}
-                                className="text-slate-500 hover:text-slate-300 p-1 rounded"
-                                title="Adjust duration (dynamically updates daily time)"
-                              >
-                                <Edit2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )}
-
-                          <span className="text-xs text-slate-400">
-                            {new Date(call.date).toLocaleString([], {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-
-                          {call.victimPersonaUsed && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700">
-                              Persona: {call.victimPersonaUsed}
-                            </span>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCall(call.id)}
-                          className="text-slate-500 hover:text-rose-400 p-1"
-                          title="Delete call"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      {call.notes && (
-                        <p className="text-xs text-slate-300 leading-relaxed">{call.notes}</p>
-                      )}
-
-                      {call.infoGiven && (
-                        <div className="text-xs bg-slate-900/90 rounded-lg p-2 border border-slate-800 text-slate-400">
-                          <span className="text-rose-400 font-semibold">Info Fed to Scammer:</span>{' '}
-                          {call.infoGiven}
-                        </div>
-                      )}
-
-                      {/* Embedded Audio Player if recording attached */}
-                      {call.audioRecordingUrl && (
-                        <AudioPlayerWidget
-                          audioUrl={call.audioRecordingUrl}
-                          audioName={call.audioRecordingName}
-                        />
-                      )}
-                    </div>
-                  ))
                 )}
               </div>
+              <Radio className="w-6 h-6 text-rose-500/40" />
             </div>
-          )}
 
-          {/* TAB 2: TELECOM & PROFILE */}
-          {activeTab === 'overview' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Pipeline Stage */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Pipeline Stage
-                  </label>
-                  <select
-                    value={status}
-                    onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 font-medium"
-                  >
-                    <option value="New">1. New (Lead / Incoming)</option>
-                    <option value="Qualified">2. Qualified (Active Session)</option>
-                    <option value="Proposition">3. Proposition (Payment Pending)</option>
-                    <option value="Won">4. Won (Neutralized / Reported)</option>
-                    <option value="New Scammer">New Scammer (Legacy)</option>
-                    <option value="Actively baiting">Actively baiting (Legacy)</option>
-                    <option value="Payment Pending">Payment Pending (Legacy)</option>
-                    <option value="Revealed / Reported">Revealed / Reported (Legacy)</option>
-                  </select>
-                </div>
+            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">
+                  Interactions Logged
+                </p>
+                <p className="text-xl font-bold text-amber-400 mt-0.5">
+                  {scammer.calls.length} calls
+                </p>
+              </div>
+              <MessageSquare className="w-6 h-6 text-amber-500/40" />
+            </div>
+          </div>
+        </div>
 
-                {/* Target Value in Dollars */}
+        {/* SECTION 1: CALL LOGS & RECORDINGS */}
+        <div
+          id="section-calls"
+          className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 backdrop-blur-sm"
+        >
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Clock className="w-5 h-5 text-rose-500" />
+              <span>Call Logs & Audio Recordings ({scammer.calls.length})</span>
+            </h3>
+
+            <button
+              type="button"
+              id="toggle-add-call-btn"
+              onClick={() => setShowAddCall(!showAddCall)}
+              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {showAddCall ? 'Cancel Form' : 'Log New Call & Audio'}
+            </button>
+          </div>
+
+          {showAddCall && (
+            <form
+              onSubmit={handleAddCallLog}
+              className="bg-slate-950 border border-rose-500/30 rounded-xl p-4 space-y-3"
+            >
+              <div className="font-semibold text-xs text-rose-400 flex items-center gap-1.5">
+                <Clock className="w-4 h-4" />
+                New Call Log Entry
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Target Deal / Fraud Amount ($)
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Call Duration (Minutes)
                   </label>
                   <input
                     type="number"
-                    min="0"
-                    step="100"
-                    value={targetValue}
-                    onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
-                      setTargetValue(val);
-                      handleSaveScammerInfo({ targetValue: val });
-                    }}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold focus:ring-2 focus:ring-emerald-500"
-                    placeholder="e.g. 24000"
+                    min="1"
+                    id="input-call-duration"
+                    value={callDuration}
+                    onChange={(e) => setCallDuration(parseInt(e.target.value) || 0)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Priority Rating */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Priority Rating
-                  </label>
-                  <div className="flex items-center gap-2 h-9 px-3 bg-slate-950 border border-slate-800 rounded-xl">
-                    {[1, 2, 3].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => {
-                          setPriority(star);
-                          handleSaveScammerInfo({ priority: star });
-                        }}
-                        className="text-base transition hover:scale-125"
-                      >
-                        <span className={star <= priority ? 'text-amber-400' : 'text-slate-700'}>
-                          ★
-                        </span>
-                      </button>
-                    ))}
-                    <span className="text-[11px] text-slate-400 ml-2">
-                      {priority === 1 ? 'Standard' : priority === 2 ? 'High Interest' : 'Top Priority'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Danger Level */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Scam Threat Level
-                  </label>
-                  <select
-                    value={dangerLevel}
-                    onChange={(e) => {
-                      const val = e.target.value as any;
-                      setDangerLevel(val);
-                      handleSaveScammerInfo({ dangerLevel: val });
-                    }}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-rose-500"
-                  >
-                    <option value="low">Low Risk (Novice / Script kiddie)</option>
-                    <option value="medium">Medium (Organized refund center)</option>
-                    <option value="high">High (Aggressive remote extortion)</option>
-                    <option value="critical">Critical (Financial drain / Wire fraud)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Carrier & Telecom with Gemini AI Scanner */}
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
-                    <Radio className="w-4 h-4 text-amber-400" />
-                    <span>Telecom & Carrier Intelligence</span>
-                  </div>
-                  <button
-                    type="button"
-                    id="scan-carrier-gemini-btn"
-                    disabled={aiLoading}
-                    onClick={handleLookupCarrier}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>{aiLoading ? 'Scanning Carrier...' : 'Scan with Gemini AI'}</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                      Carrier / VoIP Provider
-                    </label>
-                    <input
-                      type="text"
-                      value={carrier}
-                      onChange={(e) => setCarrier(e.target.value)}
-                      onBlur={() => handleSaveScammerInfo({ carrier })}
-                      placeholder="e.g. Bandwidth.com, Onvoy LLC, Twilio"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                      Location / Route
-                    </label>
-                    <input
-                      type="text"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      onBlur={() => handleSaveScammerInfo({ location })}
-                      placeholder="e.g. Kolkata / New Delhi call center gateway"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                    />
-                  </div>
-                </div>
-
-                {carrierIntel && (
-                  <div className="mt-2 p-3 bg-slate-900/90 rounded-lg border border-amber-500/30 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between text-amber-400 font-semibold">
-                      <span>AI Carrier Scan Results</span>
-                      <span className="text-[11px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300">
-                        Spoof Risk: {carrierIntel.spoofRisk}
-                      </span>
-                    </div>
-                    <p className="text-slate-300">{carrierIntel.summary}</p>
-                    <p className="text-slate-400 text-[11px]">
-                      <strong className="text-slate-300">Recommended Action:</strong>{' '}
-                      {carrierIntel.recommendedAction}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Fake Organization & Remote IDs */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Fake Organization
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Victim Persona Used
                   </label>
                   <input
                     type="text"
-                    value={organization}
-                    onChange={(e) => setOrganization(e.target.value)}
-                    onBlur={() => handleSaveScammerInfo({ organization })}
-                    placeholder="e.g. Geek Squad, FTC, PayPal"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Remote Access Session ID
-                  </label>
-                  <input
-                    type="text"
-                    value={remoteAccessId}
-                    onChange={(e) => setRemoteAccessId(e.target.value)}
-                    onBlur={() => handleSaveScammerInfo({ remoteAccessId })}
-                    placeholder="AnyDesk or UltraViewer code"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Logged Scammer IP
-                  </label>
-                  <input
-                    type="text"
-                    value={ipAddress}
-                    onChange={(e) => setIpAddress(e.target.value)}
-                    onBlur={() => handleSaveScammerInfo({ ipAddress })}
-                    placeholder="Grabify or connection IP"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                    id="input-call-persona"
+                    placeholder="e.g. Grandma Gertrude, Arthur the Teacher"
+                    value={callPersona}
+                    onChange={(e) => setCallPersona(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
                   />
                 </div>
               </div>
 
-              {/* General Dossier Notes */}
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  General Dossier Notes
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                  Call Notes & Narrative
                 </label>
                 <textarea
-                  rows={4}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo({ notes })}
-                  placeholder="Behavioral traits, background noise heard, scambait counter strategy..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white leading-relaxed"
+                  rows={2}
+                  id="input-call-notes"
+                  placeholder="What happened during this call? What lies did the scammer tell?"
+                  value={callNotes}
+                  onChange={(e) => setCallNotes(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
                 />
               </div>
 
-              {/* Danger Zone: Delete */}
-              <div className="pt-4 border-t border-slate-800 flex justify-between items-center">
-                <span className="text-xs text-slate-500">
-                  Target record ID: <span className="font-mono">{scammer.id}</span>
-                </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Victim Info Fed to Scammer
+                  </label>
+                  <input
+                    type="text"
+                    id="input-call-info-given"
+                    placeholder="e.g. Fake routing number, bogus Target card code"
+                    value={callInfoGiven}
+                    onChange={(e) => setCallInfoGiven(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Call Outcome
+                  </label>
+                  <input
+                    type="text"
+                    id="input-call-outcome"
+                    placeholder="e.g. Connected to VM, scammer hung up furious"
+                    value={callOutcome}
+                    onChange={(e) => setCallOutcome(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Audio Upload Input */}
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                  Attach Call Audio Recording (.wav, .mp3)
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition border border-slate-700">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Choose Audio File</span>
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleAudioUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <span className="text-xs text-slate-400 truncate">
+                    {audioFileName || 'No recording chosen'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete ${scammer.fullName}?`)) {
-                      onDeleteScammer(scammer.id);
-                      onClose();
-                    }
-                  }}
-                  className="text-xs text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1"
+                  onClick={() => setShowAddCall(false)}
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Delete Scammer Record
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  id="save-call-entry-btn"
+                  className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition cursor-pointer"
+                >
+                  Save Call Log
                 </button>
               </div>
-            </div>
+            </form>
           )}
 
-          {/* TAB 3: VICTIM GIVEN INFORMATION */}
-          {activeTab === 'victim_info' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-emerald-400" />
-                      Victim Given Information Tracker
-                    </h4>
-                    <p className="text-xs text-slate-400">
-                      Record all fake data fed to the scammer (bait accounts, dummy SSNs, fake gift
-                      cards, remote VM logins).
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleGenerateTable}
-                    disabled={aiLoading}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>Generate Evidence Table</span>
-                  </button>
-                </div>
+          {/* Calls List */}
+          <div className="space-y-3">
+            {scammer.calls.length === 0 ? (
+              <div className="text-center py-8 bg-slate-950/40 rounded-xl border border-slate-800 text-slate-400 text-xs">
+                No calls recorded yet. Use the Live Stopwatch above or click &quot;Log New Call&quot;.
+              </div>
+            ) : (
+              scammer.calls.map((call) => (
+                <div
+                  key={call.id}
+                  className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3 hover:border-slate-700 transition"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                    <div className="flex items-center gap-3">
+                      {/* Duration Badge with Inline Dynamic Editor */}
+                      {editingCallId === call.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            value={editingDuration}
+                            onChange={(e) => setEditingDuration(parseInt(e.target.value) || 0)}
+                            className="w-16 bg-slate-900 border border-rose-500 rounded px-2 py-0.5 text-xs text-white"
+                          />
+                          <span className="text-xs text-slate-400">min</span>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCallDuration(call.id)}
+                            className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-500 cursor-pointer"
+                            title="Save new duration"
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingCallId(null)}
+                            className="p-1 bg-slate-800 text-slate-400 rounded hover:text-white cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 font-bold font-mono text-xs border border-rose-500/30">
+                            {call.durationMinutes} mins
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCallId(call.id);
+                              setEditingDuration(call.durationMinutes);
+                            }}
+                            className="text-slate-500 hover:text-slate-300 p-1 rounded cursor-pointer"
+                            title="Adjust duration"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
 
-                <textarea
-                  rows={6}
-                  value={victimGivenInfo}
-                  onChange={(e) => setVictimGivenInfo(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo({ victimGivenInfo })}
-                  placeholder="Example:
+                      <span className="text-xs text-slate-400">
+                        {new Date(call.date).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+
+                      {call.victimPersonaUsed && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700">
+                          Persona: {call.victimPersonaUsed}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCall(call.id)}
+                      className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer"
+                      title="Delete call"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {call.notes && (
+                    <p className="text-xs text-slate-300 leading-relaxed">{call.notes}</p>
+                  )}
+
+                  {call.infoGiven && (
+                    <div className="text-xs bg-slate-900/90 rounded-lg p-2 border border-slate-800 text-slate-400">
+                      <span className="text-rose-400 font-semibold">Info Fed to Scammer:</span>{' '}
+                      {call.infoGiven}
+                    </div>
+                  )}
+
+                  {/* Embedded Audio Player if recording attached */}
+                  {call.audioRecordingUrl && (
+                    <AudioPlayerWidget
+                      audioUrl={call.audioRecordingUrl}
+                      audioName={call.audioRecordingName}
+                    />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* SECTION 2: TELECOM & PROFILE */}
+        <div
+          id="section-telecom"
+          className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 backdrop-blur-sm"
+        >
+          <div className="border-b border-slate-800 pb-3">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Radio className="w-5 h-5 text-amber-400" />
+              <span>Telecom & Target Profile Intelligence</span>
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Pipeline Stage */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Pipeline Stage
+              </label>
+              <select
+                value={status}
+                onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 font-medium"
+              >
+                <option value="Uncalled">1. Uncalled (New Lead)</option>
+                <option value="In Progress">2. In Progress (Actively Baiting)</option>
+                <option value="Top Baits">3. Top Baits (Payment Pending / High Value)</option>
+                <option value="Reported / Down">4. Reported / Down (Neutralized)</option>
+              </select>
+            </div>
+
+            {/* Target Value in Dollars */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Target Deal / Fraud Amount ($)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="100"
+                value={targetValue}
+                onChange={(e) => {
+                  const val = Number(e.target.value) || 0;
+                  setTargetValue(val);
+                  handleSaveScammerInfo({ targetValue: val });
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold focus:ring-2 focus:ring-emerald-500"
+                placeholder="e.g. 24000"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Priority Rating */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Priority Rating
+              </label>
+              <div className="flex items-center gap-2 h-9 px-3 bg-slate-950 border border-slate-800 rounded-xl">
+                {[1, 2, 3].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => {
+                      setPriority(star);
+                      handleSaveScammerInfo({ priority: star });
+                    }}
+                    className="text-base transition hover:scale-125 cursor-pointer"
+                  >
+                    <span className={star <= priority ? 'text-amber-400' : 'text-slate-700'}>
+                      ★
+                    </span>
+                  </button>
+                ))}
+                <span className="text-[11px] text-slate-400 ml-2">
+                  {priority === 1 ? 'Standard' : priority === 2 ? 'High Interest' : 'Top Priority'}
+                </span>
+              </div>
+            </div>
+
+            {/* Danger Level */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Scam Threat Level
+              </label>
+              <select
+                value={dangerLevel}
+                onChange={(e) => {
+                  const val = e.target.value as any;
+                  setDangerLevel(val);
+                  handleSaveScammerInfo({ dangerLevel: val });
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-rose-500 font-medium"
+              >
+                <option value="low">Low Risk (Novice / Script kiddie)</option>
+                <option value="medium">Medium (Organized refund center)</option>
+                <option value="high">High (Aggressive remote extortion)</option>
+                <option value="critical">Critical (Financial drain / Wire fraud)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Carrier & Telecom with Gemini AI Scanner */}
+          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+                <Radio className="w-4 h-4 text-amber-400" />
+                <span>Telecom & Carrier Intelligence</span>
+              </div>
+              <button
+                type="button"
+                id="scan-carrier-gemini-btn"
+                disabled={aiLoading}
+                onClick={handleLookupCarrier}
+                className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{aiLoading ? 'Scanning Carrier...' : 'Scan with Gemini AI'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                  Carrier / VoIP Provider
+                </label>
+                <input
+                  type="text"
+                  value={carrier}
+                  onChange={(e) => setCarrier(e.target.value)}
+                  onBlur={() => handleSaveScammerInfo({ carrier })}
+                  placeholder="e.g. Bandwidth.com, Onvoy LLC, Twilio"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                  Location / Route
+                </label>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  onBlur={() => handleSaveScammerInfo({ location })}
+                  placeholder="e.g. Kolkata / New Delhi call center gateway"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            {carrierIntel && (
+              <div className="mt-2 p-3 bg-slate-900/90 rounded-lg border border-amber-500/30 text-xs space-y-1.5">
+                <div className="flex items-center justify-between text-amber-400 font-semibold">
+                  <span>AI Carrier Scan Results</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300">
+                    Spoof Risk: {carrierIntel.spoofRisk}
+                  </span>
+                </div>
+                <p className="text-slate-300">{carrierIntel.summary}</p>
+                <p className="text-slate-400 text-[11px]">
+                  <strong className="text-slate-300">Recommended Action:</strong>{' '}
+                  {carrierIntel.recommendedAction}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Fake Organization & Remote IDs */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">
+                Fake Organization
+              </label>
+              <input
+                type="text"
+                value={organization}
+                onChange={(e) => setOrganization(e.target.value)}
+                onBlur={() => handleSaveScammerInfo({ organization })}
+                placeholder="e.g. Geek Squad, FTC, PayPal"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">
+                Remote Access Session ID
+              </label>
+              <input
+                type="text"
+                value={remoteAccessId}
+                onChange={(e) => setRemoteAccessId(e.target.value)}
+                onBlur={() => handleSaveScammerInfo({ remoteAccessId })}
+                placeholder="AnyDesk or UltraViewer code"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">
+                Logged Scammer IP
+              </label>
+              <input
+                type="text"
+                value={ipAddress}
+                onChange={(e) => setIpAddress(e.target.value)}
+                onBlur={() => handleSaveScammerInfo({ ipAddress })}
+                placeholder="Grabify or connection IP"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+              />
+            </div>
+          </div>
+
+          {/* General Dossier Notes */}
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-1">
+              General Dossier Notes
+            </label>
+            <textarea
+              rows={4}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              onBlur={() => handleSaveScammerInfo({ notes })}
+              placeholder="Behavioral traits, background noise heard, scambait counter strategy..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white leading-relaxed"
+            />
+          </div>
+
+          {/* Danger Zone: Delete */}
+          <div className="pt-4 border-t border-slate-800 flex justify-between items-center">
+            <span className="text-xs text-slate-500">
+              Target record ID: <span className="font-mono">{scammer.id}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`Are you sure you want to delete ${scammer.fullName}?`)) {
+                  onDeleteScammer(scammer.id);
+                  onClose();
+                }
+              }}
+              className="text-xs text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Scammer Record
+            </button>
+          </div>
+        </div>
+
+        {/* SECTION 3: VICTIM GIVEN INFORMATION */}
+        <div
+          id="section-victim"
+          className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 backdrop-blur-sm"
+        >
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Shield className="w-5 h-5 text-emerald-400" />
+                <span>Victim Given Information Tracker</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Record all fake data fed to the scammer (bait accounts, dummy SSNs, fake gift
+                cards, remote VM logins).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateTable}
+              disabled={aiLoading}
+              className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Generate Evidence Table</span>
+            </button>
+          </div>
+
+          <textarea
+            rows={5}
+            value={victimGivenInfo}
+            onChange={(e) => setVictimGivenInfo(e.target.value)}
+            onBlur={() => handleSaveScammerInfo({ victimGivenInfo })}
+            placeholder="Example:
 - Fake Bank: Metro Credit Union #8839-440192 (Name: Gertrude Higgins)
 - Bogus SSN Fed: XXX-XX-9942
 - Target Gift Cards Given: $500 code ending in 8819 (Declined)
 - Remote VM IP: 192.168.1.50 (Fake honeypot desktop)"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed"
+          />
+
+          {aiGeneratedTable && (
+            <div className="p-4 bg-slate-950 rounded-xl border border-amber-500/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  AI Generated Intelligence Table
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(aiGeneratedTable)}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  {copySuccess ? 'Copied!' : 'Copy Markdown'}
+                </button>
+              </div>
+              <pre className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap font-mono">
+                {aiGeneratedTable}
+              </pre>
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 4: FRAUDULENT ACCOUNTS TRACKER */}
+        <div
+          id="section-fraud"
+          className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 backdrop-blur-sm"
+        >
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-rose-400" />
+                <span>Flagged Mule Accounts & Payment Drops ({scammer.fraudAccounts.length})</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Flag bank accounts, crypto wallets, and Zelle drops collected for reporting to
+                financial institutions and IC3.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddFraud(!showAddFraud)}
+              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {showAddFraud ? 'Cancel' : 'Flag Account'}
+            </button>
+          </div>
+
+          {showAddFraud && (
+            <form
+              onSubmit={handleAddFraudAccount}
+              className="bg-slate-950 border border-rose-500/30 rounded-xl p-4 space-y-3"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Account Type
+                  </label>
+                  <select
+                    value={fraudType}
+                    onChange={(e) => setFraudType(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                  >
+                    <option value="bank_account">Bank Account (Routing + Acct)</option>
+                    <option value="crypto_wallet">Crypto Wallet (BTC, ETH, USDT)</option>
+                    <option value="zelle">Zelle Recipient</option>
+                    <option value="wire">Wire Transfer Details</option>
+                    <option value="gift_card">Gift Card Portal</option>
+                    <option value="paypal">PayPal / CashApp Handle</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Institution / Network
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Chase Bank, Binance, Wells Fargo"
+                    value={fraudInstitution}
+                    onChange={(e) => setFraudInstitution(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                  Account Details (Address, Number, Routing)
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Routing: 021000021, Acct: 9948102948"
+                  value={fraudDetails}
+                  onChange={(e) => setFraudDetails(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono"
                 />
               </div>
 
-              {aiGeneratedTable && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-amber-500/30 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      AI Generated Intelligence Table
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(aiGeneratedTable)}
-                      className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      {copySuccess ? 'Copied!' : 'Copy Markdown'}
-                    </button>
-                  </div>
-                  <pre className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap font-mono">
-                    {aiGeneratedTable}
-                  </pre>
-                </div>
-              )}
-            </div>
-          )}
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                  Mule / Account Holder Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Brandon M. (Money Mule)"
+                  value={fraudHolder}
+                  onChange={(e) => setFraudHolder(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                />
+              </div>
 
-          {/* TAB 4: FRAUDULENT ACCOUNTS TRACKER */}
-          {activeTab === 'fraud_accounts' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-rose-400" />
-                    Flagged Mule Accounts & Payment Drops
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    Flag bank accounts, crypto wallets, and Zelle drops collected for reporting to
-                    financial institutions and IC3.
-                  </p>
-                </div>
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddFraud(!showAddFraud)}
-                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow"
+                  onClick={() => setShowAddFraud(false)}
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  {showAddFraud ? 'Cancel' : 'Flag Account'}
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition cursor-pointer"
+                >
+                  Save Fraud Account
                 </button>
               </div>
-
-              {showAddFraud && (
-                <form
-                  onSubmit={handleAddFraudAccount}
-                  className="bg-slate-950 border border-rose-500/30 rounded-xl p-4 space-y-3"
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                        Account Type
-                      </label>
-                      <select
-                        value={fraudType}
-                        onChange={(e) => setFraudType(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                      >
-                        <option value="bank_account">Bank Account (Routing + Acct)</option>
-                        <option value="crypto_wallet">Crypto Wallet (BTC, ETH, USDT)</option>
-                        <option value="zelle">Zelle Recipient</option>
-                        <option value="wire">Wire Transfer Details</option>
-                        <option value="gift_card">Gift Card Portal</option>
-                        <option value="paypal">PayPal / CashApp Handle</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                        Institution / Network
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Chase Bank, Binance, Wells Fargo"
-                        value={fraudInstitution}
-                        onChange={(e) => setFraudInstitution(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                      Account Details (Address, Number, Routing)
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Routing: 021000021, Acct: 9948102948"
-                      value={fraudDetails}
-                      onChange={(e) => setFraudDetails(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                      Mule / Account Holder Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Brandon M. (Money Mule)"
-                      value={fraudHolder}
-                      onChange={(e) => setFraudHolder(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddFraud(false)}
-                      className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition"
-                    >
-                      Save Fraud Account
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* Accounts List */}
-              <div className="space-y-2.5">
-                {scammer.fraudAccounts.length === 0 ? (
-                  <div className="text-center py-8 bg-slate-950/40 rounded-xl border border-slate-800 text-slate-400 text-xs">
-                    No fraud accounts flagged yet. When a scammer demands payment, add their mule
-                    details here.
-                  </div>
-                ) : (
-                  scammer.fraudAccounts.map((acc) => (
-                    <div
-                      key={acc.id}
-                      className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                            {acc.accountType.replace('_', ' ')}
-                          </span>
-                          {acc.institution && (
-                            <span className="text-xs text-slate-300 font-semibold">
-                              {acc.institution}
-                            </span>
-                          )}
-                          {acc.reportedToBank && (
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">
-                              Reported to Bank
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs font-mono text-slate-200">{acc.accountDetails}</p>
-                        {acc.holderName && (
-                          <p className="text-[11px] text-slate-400">Holder: {acc.holderName}</p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(acc.accountDetails)}
-                          className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
-                          title="Copy details"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteFraudAccount(acc.id)}
-                          className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400"
-                          title="Delete account"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            </form>
           )}
 
-          {/* TAB 5: GEMINI AI COPILOT */}
-          {activeTab === 'ai_copilot' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/30 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                  <div>
-                    <h4 className="text-sm font-bold text-white">Gemini AI Scambait Assistant</h4>
-                    <p className="text-xs text-slate-400">
-                      Generate stalling counter-scripts, pre-fill notes, and analyze call center tactics.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleGenerateScript}
-                    disabled={aiLoading}
-                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Generate Stalling Lines & Persona Dialogue</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleGenerateTable}
-                    disabled={aiLoading}
-                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                    <span>Compile Intelligence Report Table</span>
-                  </button>
-                </div>
+          {/* Accounts List */}
+          <div className="space-y-2.5">
+            {scammer.fraudAccounts.length === 0 ? (
+              <div className="text-center py-8 bg-slate-950/40 rounded-xl border border-slate-800 text-slate-400 text-xs">
+                No fraud accounts flagged yet. When a scammer demands payment, add their mule
+                details here.
               </div>
+            ) : (
+              scammer.fraudAccounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                        {acc.accountType.replace('_', ' ')}
+                      </span>
+                      {acc.institution && (
+                        <span className="text-xs text-slate-300 font-semibold">
+                          {acc.institution}
+                        </span>
+                      )}
+                      {acc.reportedToBank && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">
+                          Reported to Bank
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-mono text-slate-200">{acc.accountDetails}</p>
+                    {acc.holderName && (
+                      <p className="text-[11px] text-slate-400">Holder: {acc.holderName}</p>
+                    )}
+                  </div>
 
-              {aiGeneratedScript && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-amber-400 font-bold">
-                    <span>Generated Stalling Counter-Script</span>
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(aiGeneratedScript)}
-                      className="text-slate-400 hover:text-white flex items-center gap-1"
+                      onClick={() => copyToClipboard(acc.accountDetails)}
+                      className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
+                      title="Copy details"
                     >
                       <Copy className="w-3.5 h-3.5" />
-                      {copySuccess ? 'Copied!' : 'Copy'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFraudAccount(acc.id)}
+                      className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400 cursor-pointer"
+                      title="Delete account"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed bg-slate-900/90 p-3 rounded-lg border border-slate-800/80">
-                    {aiGeneratedScript}
-                  </p>
                 </div>
-              )}
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* SECTION 5: GEMINI AI COPILOT */}
+        <div
+          id="section-ai"
+          className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 backdrop-blur-sm"
+        >
+          <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/30 space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-amber-400" />
+              <div>
+                <h4 className="text-sm font-bold text-white">Gemini AI Scambait Assistant</h4>
+                <p className="text-xs text-slate-400">
+                  Generate stalling counter-scripts, pre-fill notes, and analyze call center tactics.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleGenerateScript}
+                disabled={aiLoading}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Generate Stalling Lines & Persona Dialogue</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleGenerateTable}
+                disabled={aiLoading}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                <span>Compile Intelligence Report Table</span>
+              </button>
+            </div>
+          </div>
+
+          {aiGeneratedScript && (
+            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-xs text-amber-400 font-bold">
+                <span>Generated Stalling Counter-Script</span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(aiGeneratedScript)}
+                  className="text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  {copySuccess ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed bg-slate-900/90 p-3 rounded-lg border border-slate-800/80">
+                {aiGeneratedScript}
+              </p>
             </div>
           )}
         </div>
