@@ -20,7 +20,7 @@ export default function App() {
   const [loadingScammers, setLoadingScammers] = useState<boolean>(false);
   const [selectedScammer, setSelectedScammer] = useState<Scammer | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
-  const [quickAddStatus, setQuickAddStatus] = useState<CanonicalStatus>('Uncalled');
+  const [quickAddStatus, setQuickAddStatus] = useState<CanonicalStatus>('New');
 
   // Views and filters
   const [activeView, setActiveView] = useState<'pipeline' | 'analytics' | 'users'>('pipeline');
