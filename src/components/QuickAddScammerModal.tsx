@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Sparkles, Phone, User, Tag, AlertCircle, DollarSign, Building, Star } from 'lucide-react';
+import { X, UserPlus, Phone, User, Tag, AlertCircle, DollarSign, Building, Star } from 'lucide-react';
 import { api } from '../api.ts';
 import type { Scammer, CanonicalStatus } from '../types.ts';
 
@@ -23,7 +23,6 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
   const [targetValue, setTargetValue] = useState<string>('5000');
   const [organization, setOrganization] = useState('');
   const [priority, setPriority] = useState<number>(2);
-  const [scanCarrierWithAI, setScanCarrierWithAI] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +47,6 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
     try {
       const numericVal = Math.max(0, Math.round(Number(targetValue) || 0));
 
-      // 1. Create the scammer in the database
       const res = await api.createScammer({
         fullName: fullName.trim(),
         alias: alias.trim() || undefined,
@@ -59,26 +57,7 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
         organization: organization.trim() || undefined,
       });
 
-      let finalScammer = res.scammer;
-
-      // 2. If Gemini AI scan is enabled, asynchronously look up the telecom carrier
-      if (scanCarrierWithAI) {
-        try {
-          const aiRes = await api.lookupCarrier(phoneNumber.trim());
-          if (aiRes.intel && aiRes.intel.carrier) {
-            const updated = await api.updateScammer(finalScammer.id, {
-              carrier: `${aiRes.intel.carrier} (${aiRes.intel.lineType})`,
-              location: aiRes.intel.location,
-              notes: `AI Intel: ${aiRes.intel.summary}`,
-            });
-            finalScammer = updated.scammer;
-          }
-        } catch (aiErr) {
-          console.warn('Background AI carrier scan notification:', aiErr);
-        }
-      }
-
-      onCreated(finalScammer);
+      onCreated(res.scammer);
       setFullName('');
       setAlias('');
       setPhoneNumber('');
@@ -255,28 +234,6 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
             </div>
           </div>
 
-          {/* AI Carrier Check Toggle */}
-          <div className="pt-1">
-            <label className="flex items-center gap-2.5 cursor-pointer select-none bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl hover:border-slate-700 transition">
-              <input
-                type="checkbox"
-                id="toggle-ai-carrier-scan"
-                checked={scanCarrierWithAI}
-                onChange={(e) => setScanCarrierWithAI(e.target.checked)}
-                className="w-4 h-4 rounded text-emerald-600 bg-slate-900 border-slate-700 focus:ring-emerald-500"
-              />
-              <div className="flex-1">
-                <div className="font-medium text-slate-200 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  Auto-scan carrier with Gemini AI
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  Detect VoIP providers (Bandwidth, Onvoy, Twilio) and area route
-                </div>
-              </div>
-            </label>
-          </div>
-
           <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-800/80">
             <button
               type="button"
@@ -295,7 +252,7 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
               {loading ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                  <span>Saving & Scanning...</span>
+                  <span>Saving...</span>
                 </>
               ) : (
                 <span>Save to {status}</span>

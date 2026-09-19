@@ -1,6 +1,47 @@
 {
-  "users": [],
-  "scammers": [],
+  "users": [
+    {
+      "id": "7d9d57ad-335b-4a97-92d0-e6f6cf785324",
+      "email": "cookiescambait@gmail.com",
+      "name": "cookiescambait",
+      "password": null,
+      "avatarUrl": null,
+      "googleId": "google_1789805946615",
+      "role": "admin",
+      "isActivated": true,
+      "activationToken": null,
+      "activationExpiresAt": null,
+      "createdAt": "2026-09-19T08:19:06.615Z",
+      "updatedAt": "2026-09-19T08:21:46.610Z"
+    }
+  ],
+  "scammers": [
+    {
+      "id": "f7cead38-8a4f-46a2-a55f-d7e3f77efae4",
+      "fullName": "Alex Tech Scam",
+      "alias": null,
+      "phoneNumber": "+1 (800) 555-0199",
+      "status": "New",
+      "carrier": null,
+      "location": null,
+      "scamType": "Tech Support",
+      "organization": null,
+      "flagged": false,
+      "dangerLevel": "medium",
+      "victimGivenInfo": null,
+      "remoteAccessId": null,
+      "ipAddress": null,
+      "notes": null,
+      "totalTimeSpent": 0,
+      "targetValue": 5000,
+      "priority": 2,
+      "createdAt": "2026-09-19T08:19:09.794Z",
+      "updatedAt": "2026-09-19T08:19:09.794Z",
+      "userId": "7d9d57ad-335b-4a97-92d0-e6f6cf785324",
+      "calls": [],
+      "fraudAccounts": []
+    }
+  ],
   "callLogs": [],
   "fraudAccounts": []
 }

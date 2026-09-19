@@ -1,6 +1,5 @@
 {
   "name": "Scambaiter CRM Tracker",
-  "description": "Professional CRM-style scammer tracker for scambaiters featuring call logging, audio attachments, pipeline drag and drop, dynamic daily call time tracking, monthly analytics, and Gemini AI carrier & note assistance.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "description": "Professional CRM-style scammer tracker for scambaiters featuring call logging, audio attachments, pipeline drag and drop, dynamic daily call time tracking, and monthly analytics.",
+  "requestFramePermissions": []
 }

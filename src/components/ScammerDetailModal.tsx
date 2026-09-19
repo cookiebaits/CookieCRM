@@ -3,7 +3,6 @@ import {
   X,
   Phone,
   Clock,
-  Sparkles,
   Shield,
   ShieldAlert,
   AlertTriangle,
@@ -12,19 +11,16 @@ import {
   Trash2,
   Edit2,
   Check,
-  Building,
-  Globe,
   Radio,
-  FileSpreadsheet,
   MessageSquare,
   DollarSign,
   Copy,
-  ExternalLink,
+  Calendar,
 } from 'lucide-react';
-import { api } from '../api.ts';
+import { api, getStoredUser } from '../api.ts';
 import { AudioPlayerWidget } from './AudioPlayerWidget.tsx';
 import { CallTimerWidget } from './CallTimerWidget.tsx';
-import type { Scammer, CallLog, FraudAccount, PipelineStatus, CarrierIntel } from '../types.ts';
+import type { Scammer, PipelineStatus, User } from '../types.ts';
 
 interface ScammerDetailModalProps {
   scammer: Scammer;
@@ -32,6 +28,7 @@ interface ScammerDetailModalProps {
   onClose: () => void;
   onUpdateScammer: (updated: Scammer) => void;
   onDeleteScammer: (id: string) => void;
+  currentUser?: User | null;
 }
 
 export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
@@ -40,8 +37,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   onClose,
   onUpdateScammer,
   onDeleteScammer,
+  currentUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'calls' | 'victim_info' | 'fraud_accounts' | 'ai_copilot'>('calls');
+  const [activeTab, setActiveTab] = useState<'overview' | 'calls' | 'victim_info' | 'fraud_accounts'>('calls');
 
   // Edit fields
   const [status, setStatus] = useState<PipelineStatus>(scammer.status);
@@ -61,12 +59,15 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   // Call log form
   const [showAddCall, setShowAddCall] = useState(false);
   const [callDuration, setCallDuration] = useState<number>(30);
+  const [callDate, setCallDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [callPersona, setCallPersona] = useState('Grandma Gertrude');
   const [callNotes, setCallNotes] = useState('');
   const [callInfoGiven, setCallInfoGiven] = useState('');
   const [callOutcome, setCallOutcome] = useState('');
   const [audioFileName, setAudioFileName] = useState('');
   const [audioFileData, setAudioFileData] = useState('');
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   // Editing existing call
   const [editingCallId, setEditingCallId] = useState<string | null>(null);
@@ -79,11 +80,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [fraudInstitution, setFraudInstitution] = useState('');
   const [fraudHolder, setFraudHolder] = useState('');
 
-  // AI states
-  const [carrierIntel, setCarrierIntel] = useState<CarrierIntel | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiGeneratedScript, setAiGeneratedScript] = useState<string | null>(null);
-  const [aiGeneratedTable, setAiGeneratedTable] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
   if (!isOpen) return null;
@@ -127,89 +123,101 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     await handleSaveScammerInfo({ flagged: nextFlag });
   };
 
-  // Carrier scan with Gemini AI
-  const handleLookupCarrier = async () => {
-    setAiLoading(true);
-    try {
-      const res = await api.lookupCarrier(scammer.phoneNumber);
-      setCarrierIntel(res.intel);
-      if (res.intel.carrier) {
-        const fullCarrier = `${res.intel.carrier} (${res.intel.lineType})`;
-        setCarrier(fullCarrier);
-        if (res.intel.location) setLocation(res.intel.location);
-        await handleSaveScammerInfo({
-          carrier: fullCarrier,
-          location: res.intel.location || location,
-        });
-      }
-    } catch (err) {
-      console.error('AI carrier lookup error:', err);
-    } finally {
-      setAiLoading(false);
+  // Audio File Processing with Duration Enforcement
+  const processAudioFile = (file: File) => {
+    if (!file.type.startsWith('audio/')) {
+      setAudioError('Please select a valid audio file (.wav, .mp3, .m4a, .ogg, .webm).');
+      return;
     }
-  };
 
-  // AI Copilot Actions
-  const handleGenerateScript = async () => {
-    setAiLoading(true);
-    try {
-      const res = await api.assistAI({
-        action: 'generate_script',
-        context: {
-          scammerName: scammer.fullName,
-          alias: scammer.alias,
-          phone: scammer.phoneNumber,
-          scamType,
-          organization,
-          persona: callPersona,
-        },
-      });
-      if (res.counterScript) {
-        setAiGeneratedScript(res.counterScript);
+    const objectUrl = URL.createObjectURL(file);
+    const audioObj = new Audio();
+    audioObj.src = objectUrl;
+
+    audioObj.onloadedmetadata = () => {
+      const durationSec = audioObj.duration;
+      URL.revokeObjectURL(objectUrl);
+
+      const userEmail = (currentUser?.email || getStoredUser()?.email || '').toLowerCase().trim();
+      const isAdminExempt = userEmail === 'cookiescambait@gmail.com';
+
+      if (durationSec > 90 && !isAdminExempt) {
+        setAudioError(
+          `Audio recording is ${Math.round(durationSec)}s long (${(durationSec / 60).toFixed(
+            1
+          )} mins). Audio clips must be less than 1.5 minutes (90 seconds). Admin account cookiescambait@gmail.com is exempt.`
+        );
+        setAudioFileData('');
+        setAudioFileName('');
+        return;
       }
-    } catch (err) {
-      console.error('AI script error:', err);
-    } finally {
-      setAiLoading(false);
-    }
-  };
 
-  const handleGenerateTable = async () => {
-    setAiLoading(true);
-    try {
-      const res = await api.assistAI({
-        action: 'generate_table',
-        context: {
-          scammerName: scammer.fullName,
-          alias: scammer.alias,
-          phone: scammer.phoneNumber,
-          scamType,
-          organization,
-          rawNotes: notes,
-          victimInfoGiven: victimGivenInfo,
-        },
-      });
-      if (res.generatedTableMarkdown) {
-        setAiGeneratedTable(res.generatedTableMarkdown);
-      }
-    } catch (err) {
-      console.error('AI table error:', err);
-    } finally {
-      setAiLoading(false);
-    }
-  };
+      setAudioError(null);
+      setAudioFileName(file.name || 'recording.wav');
 
-  // Audio File Upload Handler
-  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setAudioFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAudioFileData(reader.result as string);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAudioFileData(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     };
-    reader.readAsDataURL(file);
+
+    audioObj.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setAudioError(null);
+      setAudioFileName(file.name || 'recording.wav');
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAudioFileData(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    };
+  };
+
+  // Drag & drop handlers for audio
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].type.startsWith('audio/')) {
+          processAudioFile(files[i]);
+          break;
+        }
+      }
+    }
+  };
+
+  // Paste handler for clipboard audio
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file' && item.type.startsWith('audio/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          processAudioFile(file);
+          break;
+        }
+      }
+    }
   };
 
   // Add Call Log
@@ -218,6 +226,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     try {
       const res = await api.addCall(scammer.id, {
         durationMinutes: callDuration,
+        date: callDate ? new Date(callDate).toISOString() : new Date().toISOString(),
         notes: callNotes,
         victimPersonaUsed: callPersona,
         infoGiven: callInfoGiven,
@@ -243,12 +252,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       setCallOutcome('');
       setAudioFileData('');
       setAudioFileName('');
+      setAudioError(null);
+      setCallDate(new Date().toISOString().split('T')[0]);
     } catch (err) {
       console.error('Add call log error:', err);
     }
   };
 
-  // Update Call Duration (Dynamic efficiency update!)
+  // Update Call Duration
   const handleSaveCallDuration = async (callId: string) => {
     try {
       const res = await api.updateCall(scammer.id, callId, {
@@ -275,7 +286,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     try {
       const res = await api.deleteCall(scammer.id, callId);
       const updatedCalls = scammer.calls.filter((c) => c.id !== callId);
-      // Recalculate today's time
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayMinutes = updatedCalls
@@ -340,6 +350,11 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     navigator.clipboard.writeText(text);
     setCopySuccess(true);
     setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  const formatAccountTypeLabel = (type: string) => {
+    if (type === 'phone_website' || type === 'gift_card') return 'Phone Number / Website';
+    return type.replace(/_/g, ' ');
   };
 
   return (
@@ -433,7 +448,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span>Call Logs & Recordings ({scammer.calls.length})</span>
+            <span>Call Logs & Audio Recordings ({scammer.calls.length})</span>
           </button>
 
           <button
@@ -472,20 +487,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             }`}
           >
             <DollarSign className="w-4 h-4" />
-            <span>Fraud Accounts ({scammer.fraudAccounts.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('ai_copilot')}
-            className={`py-3 px-3 font-semibold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'ai_copilot'
-                ? 'border-amber-500 text-amber-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Gemini AI Copilot</span>
+            <span>Flagged Accounts / Phone & Websites ({scammer.fraudAccounts.length})</span>
           </button>
         </div>
 
@@ -560,7 +562,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     New Call Log Entry
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-[11px] font-medium text-slate-300 mb-1">
                         Call Duration (Minutes)
@@ -574,6 +576,21 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                         className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-300 mb-1 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        Call Date
+                      </label>
+                      <input
+                        type="date"
+                        id="input-call-date"
+                        value={callDate}
+                        onChange={(e) => setCallDate(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-rose-500"
+                      />
+                    </div>
+
                     <div>
                       <label className="block text-[11px] font-medium text-slate-300 mb-1">
                         Victim Persona Used
@@ -632,26 +649,63 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Audio Upload Input */}
-                  <div>
+                  {/* Audio Upload Dropzone & Copy-Paste Target */}
+                  <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                      Attach Call Audio Recording (.wav, .mp3)
+                      Attach Call Audio Recording (Click to upload, Drag &amp; Drop, or Copy/Paste)
                     </label>
-                    <div className="flex items-center gap-3">
-                      <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition border border-slate-700">
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Choose Audio File</span>
-                        <input
-                          type="file"
-                          accept="audio/*"
-                          onChange={handleAudioUpload}
-                          className="hidden"
-                        />
-                      </label>
-                      <span className="text-xs text-slate-400 truncate">
-                        {audioFileName || 'No recording chosen'}
-                      </span>
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onPaste={handlePaste}
+                      tabIndex={0}
+                      className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-rose-500/50 ${
+                        isDraggingOver
+                          ? 'border-rose-500 bg-rose-500/10'
+                          : audioFileName
+                          ? 'border-emerald-500/50 bg-emerald-950/20'
+                          : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-900'
+                      }`}
+                      onClick={() => {
+                        const inputEl = document.getElementById('audio-file-input');
+                        if (inputEl) inputEl.click();
+                      }}
+                    >
+                      <input
+                        type="file"
+                        id="audio-file-input"
+                        accept="audio/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) processAudioFile(file);
+                        }}
+                        className="hidden"
+                      />
+                      <div className="flex flex-col items-center justify-center gap-1.5 pointer-events-none">
+                        <Upload className={`w-6 h-6 ${audioFileName ? 'text-emerald-400' : 'text-slate-400'}`} />
+                        {audioFileName ? (
+                          <div className="text-xs text-emerald-400 font-semibold truncate max-w-full">
+                            Selected: {audioFileName}
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-xs font-semibold text-slate-300">
+                              Click to upload, drag &amp; drop, or copy &amp; paste audio file
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              Limited to clips under 1.5 min (90 sec) &bull; Exception: cookiescambait@gmail.com
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
+                    {audioError && (
+                      <p className="text-xs text-rose-400 font-medium mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {audioError}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
@@ -881,23 +935,13 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Carrier & Telecom with Gemini AI Scanner */}
+              {/* Carrier & Telecom Info */}
               <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
                     <Radio className="w-4 h-4 text-amber-400" />
-                    <span>Telecom & Carrier Intelligence</span>
+                    <span>Telecom & Carrier Details</span>
                   </div>
-                  <button
-                    type="button"
-                    id="scan-carrier-gemini-btn"
-                    disabled={aiLoading}
-                    onClick={handleLookupCarrier}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>{aiLoading ? 'Scanning Carrier...' : 'Scan with Gemini AI'}</span>
-                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -928,22 +972,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     />
                   </div>
                 </div>
-
-                {carrierIntel && (
-                  <div className="mt-2 p-3 bg-slate-900/90 rounded-lg border border-amber-500/30 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between text-amber-400 font-semibold">
-                      <span>AI Carrier Scan Results</span>
-                      <span className="text-[11px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300">
-                        Spoof Risk: {carrierIntel.spoofRisk}
-                      </span>
-                    </div>
-                    <p className="text-slate-300">{carrierIntel.summary}</p>
-                    <p className="text-slate-400 text-[11px]">
-                      <strong className="text-slate-300">Recommended Action:</strong>{' '}
-                      {carrierIntel.recommendedAction}
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* Fake Organization & Remote IDs */}
@@ -1041,15 +1069,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       cards, remote VM logins).
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleGenerateTable}
-                    disabled={aiLoading}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>Generate Evidence Table</span>
-                  </button>
                 </div>
 
                 <textarea
@@ -1065,42 +1084,20 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed"
                 />
               </div>
-
-              {aiGeneratedTable && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-amber-500/30 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      AI Generated Intelligence Table
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(aiGeneratedTable)}
-                      className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      {copySuccess ? 'Copied!' : 'Copy Markdown'}
-                    </button>
-                  </div>
-                  <pre className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap font-mono">
-                    {aiGeneratedTable}
-                  </pre>
-                </div>
-              )}
             </div>
           )}
 
-          {/* TAB 4: FRAUDULENT ACCOUNTS TRACKER */}
+          {/* TAB 4: FLAGGER MULE ACCOUNTS / PHONE NUMBER & WEBSITES TRACKER */}
           {activeTab === 'fraud_accounts' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-rose-400" />
-                    Flagged Mule Accounts & Payment Drops
+                    Flagged Mule Accounts / Phone Number &amp; Websites ({scammer.fraudAccounts.length})
                   </h4>
                   <p className="text-xs text-slate-400">
-                    Flag bank accounts, crypto wallets, and Zelle drops collected for reporting to
+                    Flag bank accounts, crypto wallets, phone numbers, websites, and Zelle drops collected for reporting to
                     financial institutions and IC3.
                   </p>
                 </div>
@@ -1110,7 +1107,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  {showAddFraud ? 'Cancel' : 'Flag Account'}
+                  {showAddFraud ? 'Cancel' : 'Flag Item'}
                 </button>
               </div>
 
@@ -1133,18 +1130,18 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                         <option value="crypto_wallet">Crypto Wallet (BTC, ETH, USDT)</option>
                         <option value="zelle">Zelle Recipient</option>
                         <option value="wire">Wire Transfer Details</option>
-                        <option value="gift_card">Gift Card Portal</option>
+                        <option value="phone_website">Phone Number / Website</option>
                         <option value="paypal">PayPal / CashApp Handle</option>
                       </select>
                     </div>
 
                     <div>
                       <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                        Institution / Network
+                        Institution / Network / Domain
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. Chase Bank, Binance, Wells Fargo"
+                        placeholder="e.g. Chase Bank, Binance, scammerdomain.com"
                         value={fraudInstitution}
                         onChange={(e) => setFraudInstitution(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
@@ -1154,12 +1151,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
                   <div>
                     <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                      Account Details (Address, Number, Routing)
+                      Details (Phone Number, URL, Acct Number, Address)
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Routing: 021000021, Acct: 9948102948"
+                      placeholder="e.g. +1 (800) 555-0199 or https://fake-tech-support.com"
                       value={fraudDetails}
                       onChange={(e) => setFraudDetails(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono"
@@ -1168,7 +1165,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
                   <div>
                     <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                      Mule / Account Holder Name
+                      Mule / Account / Target Name
                     </label>
                     <input
                       type="text"
@@ -1191,7 +1188,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       type="submit"
                       className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition"
                     >
-                      Save Fraud Account
+                      Save Flagged Item
                     </button>
                   </div>
                 </form>
@@ -1201,8 +1198,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               <div className="space-y-2.5">
                 {scammer.fraudAccounts.length === 0 ? (
                   <div className="text-center py-8 bg-slate-950/40 rounded-xl border border-slate-800 text-slate-400 text-xs">
-                    No fraud accounts flagged yet. When a scammer demands payment, add their mule
-                    details here.
+                    No items flagged yet. When a scammer provides account details, phone numbers, or websites, add them here.
                   </div>
                 ) : (
                   scammer.fraudAccounts.map((acc) => (
@@ -1213,7 +1209,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                            {acc.accountType.replace('_', ' ')}
+                            {formatAccountTypeLabel(acc.accountType)}
                           </span>
                           {acc.institution && (
                             <span className="text-xs text-slate-300 font-semibold">
@@ -1222,7 +1218,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                           )}
                           {acc.reportedToBank && (
                             <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">
-                              Reported to Bank
+                              Reported
                             </span>
                           )}
                         </div>
@@ -1245,7 +1241,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                           type="button"
                           onClick={() => handleDeleteFraudAccount(acc.id)}
                           className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400"
-                          title="Delete account"
+                          title="Delete item"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1254,64 +1250,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   ))
                 )}
               </div>
-            </div>
-          )}
-
-          {/* TAB 5: GEMINI AI COPILOT */}
-          {activeTab === 'ai_copilot' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/30 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                  <div>
-                    <h4 className="text-sm font-bold text-white">Gemini AI Scambait Assistant</h4>
-                    <p className="text-xs text-slate-400">
-                      Generate stalling counter-scripts, pre-fill notes, and analyze call center tactics.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleGenerateScript}
-                    disabled={aiLoading}
-                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Generate Stalling Lines & Persona Dialogue</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleGenerateTable}
-                    disabled={aiLoading}
-                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                    <span>Compile Intelligence Report Table</span>
-                  </button>
-                </div>
-              </div>
-
-              {aiGeneratedScript && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-amber-400 font-bold">
-                    <span>Generated Stalling Counter-Script</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(aiGeneratedScript)}
-                      className="text-slate-400 hover:text-white flex items-center gap-1"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      {copySuccess ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed bg-slate-900/90 p-3 rounded-lg border border-slate-800/80">
-                    {aiGeneratedScript}
-                  </p>
-                </div>
-              )}
             </div>
           )}
         </div>

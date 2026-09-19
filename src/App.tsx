@@ -344,6 +344,7 @@ export default function App() {
           onClose={() => setSelectedScammer(null)}
           onUpdateScammer={handleUpdateScammer}
           onDeleteScammer={handleDeleteScammer}
+          currentUser={user}
         />
       )}
     </div>
