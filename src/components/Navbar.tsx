@@ -55,7 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <img
               src="/logo.png"
               alt="Scambaiter CRM Intelligence"
-              className="h-9 sm:h-10 w-auto object-contain"
+              className="h-8 sm:h-9 w-auto object-contain max-w-[200px] sm:max-w-xs"
             />
           </button>
 
