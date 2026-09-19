@@ -363,7 +363,7 @@ export function getSampleCSVTemplate(): string {
       targetValue: 19800,
       priority: 2,
       scamType: 'Bank Wire Fraud',
-      organization: 'Gemini Furniture',
+      organization: 'Acme Furniture',
       carrier: 'Twilio Cloud',
       location: 'Chicago Hub',
       dangerLevel: 'low',

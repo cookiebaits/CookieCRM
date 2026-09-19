@@ -12,7 +12,6 @@ import {
   parseJwtPayload,
   type AuthenticatedRequest,
 } from './auth.ts';
-import { lookupPhoneProvider, assistWithNotes } from './gemini.ts';
 import {
   getGoogleClientId,
   getGoogleClientSecret,
@@ -869,41 +868,6 @@ apiRouter.get('/analytics/monthly', requireAuth, async (req: AuthenticatedReques
   }
 });
 
-// ==========================================
-// GEMINI AI INTEGRATION
-// ==========================================
-
-// Phone provider & carrier intelligence lookup
-apiRouter.post('/ai/carrier-lookup', requireAuth, async (req, res) => {
-  try {
-    const { phoneNumber } = req.body;
-    if (!phoneNumber) {
-      return res.status(400).json({ error: 'Phone number is required.' });
-    }
-
-    const intel = await lookupPhoneProvider(phoneNumber);
-    return res.json({ intel });
-  } catch (error) {
-    console.error('Carrier lookup error:', error);
-    return res.status(500).json({ error: 'Failed to lookup phone provider.' });
-  }
-});
-
-// AI Copilot for scambait notes, script generation & tables
-apiRouter.post('/ai/assist', requireAuth, async (req, res) => {
-  try {
-    const { action, context } = req.body;
-    if (!action) {
-      return res.status(400).json({ error: 'Action parameter is required.' });
-    }
-
-    const result = await assistWithNotes({ action, context: context || {} });
-    return res.json(result);
-  } catch (error) {
-    console.error('AI assist error:', error);
-    return res.status(500).json({ error: 'Failed to generate AI assistance.' });
-  }
-});
 
 // ==========================================
 // ADMIN USER MANAGEMENT

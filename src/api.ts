@@ -269,28 +269,6 @@ export const api = {
     return request('/api/analytics/monthly');
   },
 
-  // Gemini AI
-  async lookupCarrier(phoneNumber: string): Promise<{ intel: CarrierIntel }> {
-    return request('/api/ai/carrier-lookup', {
-      method: 'POST',
-      body: JSON.stringify({ phoneNumber }),
-    });
-  },
-
-  async assistAI(params: {
-    action: 'prefill_notes' | 'generate_script' | 'generate_table' | 'threat_summary';
-    context: Record<string, any>;
-  }): Promise<{
-    suggestedNotes?: string;
-    counterScript?: string;
-    generatedTableMarkdown?: string;
-    keyInsights?: string[];
-  }> {
-    return request('/api/ai/assist', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  },
 
   async getConfig(): Promise<{
     googleClientId: string;

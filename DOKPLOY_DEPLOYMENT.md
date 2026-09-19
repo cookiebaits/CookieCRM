@@ -41,7 +41,6 @@ ADMIN_PASS=sbAdmin2026!#
 
 # Security & Secrets
 JWT_SECRET=generate-a-strong-32-character-random-key
-GEMINI_API_KEY=your-gemini-api-key-here
 GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
 APP_URL=https://your-domain.com
 

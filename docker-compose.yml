@@ -22,7 +22,6 @@ services:
       - ADMIN_USER=${ADMIN_USER:-sbadmin@cookiebaits}
       - ADMIN_PASS=${ADMIN_PASS:-sbAdmin2026!#}
       - JWT_SECRET=${JWT_SECRET:-super-secret-dokploy-scambaiter-key-2026}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - APP_URL=${APP_URL:-https://your-domain.com}
     volumes:
