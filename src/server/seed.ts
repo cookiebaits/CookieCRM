@@ -1,4 +1,4 @@
-import { db, waitForDatabaseReady, clearAllPrefilledData } from './db.ts';
+import { db, waitForDatabaseReady } from './db.ts';
 import { PRIMARY_ADMIN_EMAIL } from './auth.ts';
 
 export async function seedInitialData() {
@@ -6,10 +6,7 @@ export async function seedInitialData() {
     // Wait for Supabase direct PostgreSQL connection to establish and schema to validate
     await waitForDatabaseReady();
 
-    // 1. Remove all prefilled demo/mock scammers, call logs, and fraud accounts so all accounts start clean
-    await clearAllPrefilledData();
-
-    // 2. Clean up legacy demo/test accounts that are no longer needed
+    // Clean up legacy demo/test accounts that are no longer needed
     const obsoleteEmails = [
       'sbadmin@cookiebaits',
       'tester@cookiebaits',
@@ -41,7 +38,7 @@ export async function seedInitialData() {
       }
     }
 
-    console.log('[SEED] Initial state synchronized. Pipeline is empty and ready for new targets.');
+    console.log('[SEED] Initial state synchronized and persistent Supabase database ready.');
   } catch (err) {
     console.error('[SEED] Error running initialization:', err);
   }

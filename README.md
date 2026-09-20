@@ -53,11 +53,19 @@ Built for containerized deployment on **Dokploy** behind a **Cloudflare / Traefi
 ```env
 PORT=3000
 NODE_ENV=production
+DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.fanivhbjwfaiezpsawpa.supabase.co:5432/postgres
+DIRECT_URL=postgresql://postgres:[YOUR-PASSWORD]@db.fanivhbjwfaiezpsawpa.supabase.co:5432/postgres
 JWT_SECRET=your-secret-key
 PRIMARY_ADMIN_EMAIL=cookiescambait@gmail.com
 GOOGLE_CLIENT_ID=your-google-client-id
 APP_URL=https://your-crm-domain.com
 ```
+
+### Supabase Database & SQL Editor Setup
+1. Log in to your **Supabase Dashboard** -> Select project (`fanivhbjwfaiezpsawpa`).
+2. Go to **Settings** -> **Database** -> **Connection string** -> Choose **Direct connection (URI)**.
+3. Copy the URI and set `DATABASE_URL` in your Dokploy Environment settings (ensure special characters in password are percent-encoded).
+4. Navigate to **SQL Editor** in Supabase, create a new query, paste the contents of `supabase-schema.sql`, and click **Run**.
 
 ### Network Ports
 - **Application Port**: `3000` (Internal container & proxy routing)

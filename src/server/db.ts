@@ -498,13 +498,16 @@ export const db = {
           } else if (activationToken) {
             res = await pgPool.query('SELECT * FROM users WHERE activation_token = $1 LIMIT 1', [activationToken]);
           }
-          if (res && res.rows[0]) {
-            const mapped = mapUserRow(res.rows[0]);
-            // update local cache
-            const idx = state.users.findIndex((u) => u.id === mapped.id);
-            if (idx >= 0) state.users[idx] = mapped; else state.users.push(mapped);
-            persistToDisk();
-            return decorateUser(mapped);
+          if (res) {
+            if (res.rows[0]) {
+              const mapped = mapUserRow(res.rows[0]);
+              // update local cache
+              const idx = state.users.findIndex((u) => u.id === mapped.id);
+              if (idx >= 0) state.users[idx] = mapped; else state.users.push(mapped);
+              persistToDisk();
+              return decorateUser(mapped);
+            }
+            return null;
           }
         } catch (err) {
           console.warn('[DB-POSTGRES] findUnique fallback:', err);
@@ -527,15 +530,15 @@ export const db = {
         try {
           if (args.where.activationToken) {
             const res = await pgPool.query('SELECT * FROM users WHERE activation_token = $1 LIMIT 1', [args.where.activationToken]);
-            if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+            return res.rows[0] ? decorateUser(mapUserRow(res.rows[0])) : null;
           }
           if (args.where.email) {
             const res = await pgPool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [args.where.email]);
-            if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+            return res.rows[0] ? decorateUser(mapUserRow(res.rows[0])) : null;
           }
           if (args.where.googleId) {
             const res = await pgPool.query('SELECT * FROM users WHERE google_id = $1 LIMIT 1', [args.where.googleId]);
-            if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+            return res.rows[0] ? decorateUser(mapUserRow(res.rows[0])) : null;
           }
           if (Array.isArray(args.where.OR)) {
             for (const cond of args.where.OR) {
@@ -552,10 +555,11 @@ export const db = {
                 if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
               }
             }
+            return null;
           }
           if (args.where.role) {
             const res = await pgPool.query('SELECT * FROM users WHERE role = $1 LIMIT 1', [args.where.role]);
-            if (res.rows[0]) return decorateUser(mapUserRow(res.rows[0]));
+            return res.rows[0] ? decorateUser(mapUserRow(res.rows[0])) : null;
           }
         } catch (err) {
           console.warn('[DB-POSTGRES] findFirst fallback:', err);
@@ -801,15 +805,13 @@ export const db = {
           const mappedScammers = res.rows.map(mapScammerRow);
           state.scammers = mappedScammers;
 
-          // Fetch calls and fraud accounts in parallel
-          if (args?.include?.calls || args?.include?.fraudAccounts) {
-            const [callRes, fraudRes] = await Promise.all([
-              pgPool.query('SELECT * FROM call_logs ORDER BY date DESC'),
-              pgPool.query('SELECT * FROM fraud_accounts ORDER BY created_at DESC'),
-            ]);
-            state.callLogs = callRes.rows.map(mapCallLogRow);
-            state.fraudAccounts = fraudRes.rows.map(mapFraudAccountRow);
-          }
+          // Always keep call logs and fraud accounts synchronized in memory from PostgreSQL
+          const [callRes, fraudRes] = await Promise.all([
+            pgPool.query('SELECT * FROM call_logs ORDER BY date DESC'),
+            pgPool.query('SELECT * FROM fraud_accounts ORDER BY created_at DESC'),
+          ]);
+          state.callLogs = callRes.rows.map(mapCallLogRow);
+          state.fraudAccounts = fraudRes.rows.map(mapFraudAccountRow);
           persistToDisk();
         } catch (err) {
           console.warn('[DB-POSTGRES] findMany scammers fallback:', err);
@@ -865,6 +867,8 @@ export const db = {
               item.fraudAccounts = fa.rows.map(mapFraudAccountRow);
             }
             return item;
+          } else {
+            return null;
           }
         } catch (err) {
           console.warn('[DB-POSTGRES] findUnique scammer fallback:', err);

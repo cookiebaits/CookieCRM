@@ -54,11 +54,14 @@ NODE_ENV=production
 
 ## 3. Supabase Schema Setup
 
-To create the tables in your Supabase project:
+To initialize or migrate the database tables in your Supabase project:
 1. Open your Supabase Dashboard: `https://supabase.com/dashboard/project/fanivhbjwfaiezpsawpa`
-2. Navigate to the **SQL Editor** tab.
-3. Copy and run the contents of `/supabase-schema.sql` located in the root of this repository.
-4. Obtain your API Key from **Project Settings** -> **API** -> `anon public` or `service_role secret` and paste it into `SUPABASE_KEY`.
+2. In the left navigation bar, click on **SQL Editor**.
+3. Click **New Query**.
+4. Copy and paste the entire script from `supabase-schema.sql` (found in the repository root) into the editor.
+5. Click **Run** (or press Ctrl+Enter / Cmd+Enter).
+6. Verify that the message `Success. No rows returned` appears. All 4 primary tables (`users`, `scammers`, `call_logs`, `fraud_accounts`), performance indexes, and RLS policies are now active.
+7. Note: The CRM application also automatically validates and creates missing tables or missing columns on startup.
 
 ---
 
