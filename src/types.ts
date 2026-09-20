@@ -8,6 +8,10 @@ export interface User {
 }
 
 export type PipelineStatus =
+  | 'New / Uncalled'
+  | 'Currently Baiting'
+  | 'Top Scams'
+  | 'Reported / Down'
   | 'New'
   | 'Qualified'
   | 'Proposition'
@@ -17,16 +21,16 @@ export type PipelineStatus =
   | 'Payment Pending'
   | 'Revealed / Reported';
 
-export type CanonicalStatus = 'New' | 'Qualified' | 'Proposition' | 'Won';
+export type CanonicalStatus = 'New / Uncalled' | 'Currently Baiting' | 'Top Scams' | 'Reported / Down';
 
 export function toCanonicalStatus(status?: string | null): CanonicalStatus {
-  if (!status) return 'New';
+  if (!status) return 'New / Uncalled';
   const s = status.trim().toLowerCase();
-  if (s === 'new' || s.includes('new')) return 'New';
-  if (s === 'qualified' || s.includes('qualif') || s.includes('bait')) return 'Qualified';
-  if (s === 'proposition' || s.includes('prop') || s.includes('payment') || s.includes('pend')) return 'Proposition';
-  if (s === 'won' || s.includes('won') || s.includes('reveal') || s.includes('report') || s.includes('close')) return 'Won';
-  return 'New';
+  if (s === 'new / uncalled' || s === 'new' || s === 'new scammer' || s.includes('uncalled') || s.includes('new')) return 'New / Uncalled';
+  if (s === 'currently baiting' || s === 'qualified' || s === 'actively baiting' || s.includes('bait') || s.includes('qualif')) return 'Currently Baiting';
+  if (s === 'top scams' || s === 'proposition' || s === 'payment pending' || s.includes('top') || s.includes('prop') || s.includes('pay')) return 'Top Scams';
+  if (s === 'reported / down' || s === 'won' || s === 'revealed / reported' || s.includes('down') || s.includes('report') || s.includes('won')) return 'Reported / Down';
+  return 'New / Uncalled';
 }
 
 export interface CallLog {

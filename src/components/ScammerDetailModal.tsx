@@ -863,10 +863,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 font-medium"
                   >
-                    <option value="New">1. New (Lead / Incoming)</option>
-                    <option value="Qualified">2. Qualified (Active Session)</option>
-                    <option value="Proposition">3. Proposition (Payment Pending)</option>
-                    <option value="Won">4. Won (Neutralized / Reported)</option>
+                    <option value="New / Uncalled">1. New / Uncalled</option>
+                    <option value="Currently Baiting">2. Currently Baiting</option>
+                    <option value="Top Scams">3. Top Scams</option>
+                    <option value="Reported / Down">4. Reported / Down</option>
                     <option value="New Scammer">New Scammer (Legacy)</option>
                     <option value="Actively baiting">Actively baiting (Legacy)</option>
                     <option value="Payment Pending">Payment Pending (Legacy)</option>
@@ -984,8 +984,29 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Fake Organization & Remote IDs */}
+              {/* Scam Type, Fake Organization & Remote IDs */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Scam Type
+                  </label>
+                  <select
+                    value={scamType || 'Tech / Refund'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setScamType(val);
+                      handleSaveScammerInfo({ scamType: val });
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-300 font-medium focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="Crypto Investment">Crypto Investment</option>
+                    <option value="IRS / Govt">IRS / Govt</option>
+                    <option value="Lotto / Sweepstakes">Lotto / Sweepstakes</option>
+                    <option value="Other">Other</option>
+                    <option value="Spellcaster / Pet">Spellcaster / Pet</option>
+                    <option value="Tech / Refund">Tech / Refund</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">
                     Fake Organization
@@ -995,7 +1016,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     value={organization}
                     onChange={(e) => setOrganization(e.target.value)}
                     onBlur={() => handleSaveScammerInfo({ organization })}
-                    placeholder="e.g. Geek Squad, FTC, PayPal"
+                    placeholder="e.g. Deco Addict, Geek Squad"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   />
                 </div>

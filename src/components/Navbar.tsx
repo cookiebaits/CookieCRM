@@ -49,13 +49,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={() => onChangeView('pipeline')}
-            className="flex items-center hover:opacity-95 transition focus:outline-none cursor-pointer"
+            className="flex items-center hover:opacity-95 transition focus:outline-none cursor-pointer relative z-20"
             title="Scambaiter CRM Intelligence"
           >
             <img
               src="/logo.png"
               alt="Scambaiter CRM Intelligence"
-              className="h-8 sm:h-9 w-auto object-contain max-w-[200px] sm:max-w-xs"
+              className="h-10 sm:h-12 w-auto object-contain max-w-[240px] sm:max-w-xs drop-shadow-md -my-2.5 transition-transform hover:scale-105"
             />
           </button>
 

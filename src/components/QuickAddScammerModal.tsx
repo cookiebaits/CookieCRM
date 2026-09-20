@@ -14,12 +14,13 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
   isOpen,
   onClose,
   onCreated,
-  initialStatus = 'New',
+  initialStatus = 'New / Uncalled',
 }) => {
   const [fullName, setFullName] = useState('');
   const [alias, setAlias] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [status, setStatus] = useState<CanonicalStatus>(initialStatus);
+  const [scamType, setScamType] = useState<string>('Tech / Refund');
   const [targetValue, setTargetValue] = useState<string>('5000');
   const [organization, setOrganization] = useState('');
   const [priority, setPriority] = useState<number>(2);
@@ -28,7 +29,7 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setStatus(initialStatus || 'New');
+      setStatus(initialStatus || 'New / Uncalled');
     }
   }, [isOpen, initialStatus]);
 
@@ -52,6 +53,7 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
         alias: alias.trim() || undefined,
         phoneNumber: phoneNumber.trim(),
         status,
+        scamType,
         targetValue: numericVal,
         priority,
         organization: organization.trim() || undefined,
@@ -156,8 +158,8 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
             </div>
           </div>
 
-          {/* 3. Stage & Target Deal Value */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* 3. Stage, Scam Type & Target Deal Value */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-semibold text-slate-300 mb-1.5">
                 Baiting Stage
@@ -165,19 +167,37 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as CanonicalStatus)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="New">1. New (Lead / Incoming)</option>
-                <option value="Qualified">2. Qualified (Active Session)</option>
-                <option value="Proposition">3. Proposition (Payment Pending)</option>
-                <option value="Won">4. Won (Neutralized / Reported)</option>
+                <option value="New / Uncalled">1. New / Uncalled</option>
+                <option value="Currently Baiting">2. Currently Baiting</option>
+                <option value="Top Scams">3. Top Scams</option>
+                <option value="Reported / Down">4. Reported / Down</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-300 mb-1.5">
+                Scam Type
+              </label>
+              <select
+                value={scamType}
+                onChange={(e) => setScamType(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-amber-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="Crypto Investment">Crypto Investment</option>
+                <option value="IRS / Govt">IRS / Govt</option>
+                <option value="Lotto / Sweepstakes">Lotto / Sweepstakes</option>
+                <option value="Other">Other</option>
+                <option value="Spellcaster / Pet">Spellcaster / Pet</option>
+                <option value="Tech / Refund">Tech / Refund</option>
               </select>
             </div>
 
             <div>
               <label className="block font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                 <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                Target Fraud Amount ($)
+                Target Amount ($)
               </label>
               <input
                 type="number"
@@ -187,7 +207,7 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
                 placeholder="e.g. 24000"
                 value={targetValue}
                 onChange={(e) => setTargetValue(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
               />
             </div>
           </div>
