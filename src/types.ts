@@ -64,6 +64,8 @@ export interface Scammer {
   fullName: string;
   alias?: string | null;
   phoneNumber: string;
+  phoneNumbers?: string[]; // Up to 4 phone numbers
+  whatsappNumber?: string | null; // WhatsApp number
   status: PipelineStatus;
   carrier?: string | null;
   location?: string | null;
