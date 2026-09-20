@@ -8,6 +8,8 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard.tsx';
 import { QuickAddScammerModal } from './components/QuickAddScammerModal.tsx';
 import { ScammerDetailModal } from './components/ScammerDetailModal.tsx';
 import { AdminUserManagement } from './components/AdminUserManagement.tsx';
+import { PublicScammerView } from './components/PublicScammerView.tsx';
+import { TermsAndPrivacyModal } from './components/TermsAndPrivacyModal.tsx';
 import type { User, Scammer, PipelineStatus, CanonicalStatus } from './types.ts';
 
 export default function App() {
@@ -22,11 +24,25 @@ export default function App() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
   const [quickAddStatus, setQuickAddStatus] = useState<CanonicalStatus>('New');
 
+  // Terms & Privacy modal state
+  const [showTermsModal, setShowTermsModal] = useState<boolean>(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
   // Views and filters
   const [activeView, setActiveView] = useState<'pipeline' | 'analytics' | 'users'>('pipeline');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [flaggedOnly, setFlaggedOnly] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+
+  // Check for public share route (/share/:id or ?share=:id)
+  const [publicShareId, setPublicShareId] = useState<string | null>(() => {
+    const pathname = window.location.pathname;
+    if (pathname.startsWith('/share/')) {
+      return pathname.replace('/share/', '').trim();
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get('share') || null;
+  });
 
   const isAdmin = user?.role === 'admin' || user?.role === 'admin_scambaiter';
 
@@ -141,6 +157,25 @@ export default function App() {
     }
   }, [user]);
 
+  // Require terms acceptance before proceeding with sensitive "add" actions
+  const requireTermsAcceptance = (action: () => void) => {
+    if (user && !user.hasAcceptedTerms) {
+      setPendingAction(() => action);
+      setShowTermsModal(true);
+      return;
+    }
+    action();
+  };
+
+  const handleTermsAccepted = (updatedUser: User) => {
+    setUser(updatedUser);
+    setShowTermsModal(false);
+    if (pendingAction) {
+      pendingAction();
+      setPendingAction(null);
+    }
+  };
+
   // Handle pipeline drag & drop move
   const handleMovePipeline = async (scammerId: string, newStatus: PipelineStatus) => {
     // Optimistic UI update
@@ -212,6 +247,19 @@ export default function App() {
     });
   }, [scammers, searchQuery, flaggedOnly]);
 
+  // If viewing a public shared link
+  if (publicShareId) {
+    return (
+      <PublicScammerView
+        scammerId={publicShareId}
+        onGoHome={() => {
+          window.history.replaceState({}, document.title, '/');
+          setPublicShareId(null);
+        }}
+      />
+    );
+  }
+
   // If loading auth
   if (authChecking) {
     return (
@@ -238,7 +286,12 @@ export default function App() {
         onSearchChange={setSearchQuery}
         flaggedOnly={flaggedOnly}
         onToggleFlagged={() => setFlaggedOnly(!flaggedOnly)}
-        onOpenQuickAdd={() => setIsQuickAddOpen(true)}
+        onOpenQuickAdd={() =>
+          requireTermsAcceptance(() => {
+            setQuickAddStatus('New');
+            setIsQuickAddOpen(true);
+          })
+        }
         onLogout={handleLogout}
       />
 
@@ -297,8 +350,10 @@ export default function App() {
                 onSelectScammer={(s) => setSelectedScammer(s)}
                 onMovePipeline={handleMovePipeline}
                 onQuickAdd={(status) => {
-                  setQuickAddStatus(status || 'New');
-                  setIsQuickAddOpen(true);
+                  requireTermsAcceptance(() => {
+                    setQuickAddStatus(status || 'New');
+                    setIsQuickAddOpen(true);
+                  });
                 }}
                 onUpdateScammer={async (scammerId, data) => {
                   try {
@@ -334,6 +389,12 @@ export default function App() {
         onClose={() => setIsQuickAddOpen(false)}
         onCreated={handleScammerCreated}
         initialStatus={quickAddStatus}
+      />
+
+      {/* Terms of Use & Privacy Policy Acceptance Modal */}
+      <TermsAndPrivacyModal
+        isOpen={showTermsModal}
+        onAccepted={handleTermsAccepted}
       />
 
       {/* Scammer Dossier & Call Log Modal */}

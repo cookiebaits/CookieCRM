@@ -11,6 +11,7 @@ export interface AuthUser {
   name: string;
   avatarUrl?: string | null;
   role: string;
+  hasAcceptedTerms?: boolean;
 }
 
 export function generateToken(user: AuthUser): string {
@@ -52,10 +53,33 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     return res.status(401).json({ error: 'Invalid or expired session. Please log in again.' });
   }
 
-  const dbUser = await db.user.findUnique({
+  let dbUser = await db.user.findUnique({
     where: { id: payload.id },
-    select: { id: true, email: true, name: true, avatarUrl: true, role: true },
+    select: { id: true, email: true, name: true, avatarUrl: true, role: true, hasAcceptedTerms: true },
   });
+
+  if (!dbUser && payload.email) {
+    // Try finding by email if ID lookup fails
+    dbUser = await db.user.findUnique({
+      where: { email: payload.email },
+      select: { id: true, email: true, name: true, avatarUrl: true, role: true, hasAcceptedTerms: true },
+    });
+  }
+
+  if (!dbUser && payload.email) {
+    // Self-healing: reconstruct session user if database was reset or cleared
+    const isPrimaryAdmin = payload.email.toLowerCase().trim() === PRIMARY_ADMIN_EMAIL;
+    dbUser = await db.user.create({
+      data: {
+        id: payload.id,
+        email: payload.email.toLowerCase().trim(),
+        name: payload.name || 'Scambaiter Agent',
+        role: isPrimaryAdmin ? 'admin' : 'user',
+        isActivated: true,
+      },
+      select: { id: true, email: true, name: true, avatarUrl: true, role: true, hasAcceptedTerms: true },
+    });
+  }
 
   if (!dbUser) {
     return res.status(401).json({ error: 'User not found in database.' });

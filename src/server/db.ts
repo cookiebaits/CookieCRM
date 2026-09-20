@@ -12,6 +12,7 @@ export interface UserRecord {
   googleId?: string | null;
   role: string;
   isActivated?: boolean;
+  hasAcceptedTerms?: boolean;
   activationToken?: string | null;
   activationExpiresAt?: Date | null;
   createdAt: Date;
@@ -331,6 +332,7 @@ async function initSupabaseDirectSchema() {
 
       -- Ensure activation columns exist on users table
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_activated BOOLEAN NOT NULL DEFAULT TRUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS has_accepted_terms BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_expires_at TIMESTAMPTZ;
 
@@ -372,6 +374,7 @@ function mapUserRow(row: any): UserRecord {
     googleId: row.google_id,
     role: row.role,
     isActivated: row.is_activated !== false,
+    hasAcceptedTerms: Boolean(row.has_accepted_terms),
     activationToken: row.activation_token || null,
     activationExpiresAt: row.activation_expires_at ? new Date(row.activation_expires_at) : null,
     createdAt: new Date(row.created_at),
@@ -604,6 +607,7 @@ export const db = {
         googleId: args.data.googleId || null,
         role: args.data.role || 'scambaiter',
         isActivated: args.data.isActivated !== undefined ? args.data.isActivated : true,
+        hasAcceptedTerms: Boolean(args.data.hasAcceptedTerms),
         activationToken: args.data.activationToken || null,
         activationExpiresAt: args.data.activationExpiresAt || null,
         createdAt: args.data.createdAt || now,
@@ -613,8 +617,8 @@ export const db = {
       if (isPostgresReady && pgPool) {
         try {
           const res = await pgPool.query(
-            `INSERT INTO users (id, email, password, name, avatar_url, google_id, role, is_activated, activation_token, activation_expires_at, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            `INSERT INTO users (id, email, password, name, avatar_url, google_id, role, is_activated, has_accepted_terms, activation_token, activation_expires_at, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
              ON CONFLICT (email) DO UPDATE SET
                name = EXCLUDED.name,
                password = COALESCE(EXCLUDED.password, users.password),
@@ -622,6 +626,7 @@ export const db = {
                google_id = COALESCE(EXCLUDED.google_id, users.google_id),
                role = EXCLUDED.role,
                is_activated = EXCLUDED.is_activated,
+               has_accepted_terms = EXCLUDED.has_accepted_terms,
                activation_token = EXCLUDED.activation_token,
                activation_expires_at = EXCLUDED.activation_expires_at,
                updated_at = NOW()
@@ -635,6 +640,7 @@ export const db = {
               user.googleId,
               user.role,
               user.isActivated,
+              user.hasAcceptedTerms,
               user.activationToken,
               user.activationExpiresAt,
               user.createdAt,
@@ -683,10 +689,11 @@ export const db = {
                  role = COALESCE($4, role),
                  avatar_url = COALESCE($5, avatar_url),
                  is_activated = COALESCE($6, is_activated),
-                 activation_token = $7,
-                 activation_expires_at = $8,
+                 has_accepted_terms = COALESCE($7, has_accepted_terms),
+                 activation_token = $8,
+                 activation_expires_at = $9,
                  updated_at = NOW()
-               WHERE id = $9`,
+               WHERE id = $10`,
               [
                 updated.email,
                 updated.name,
@@ -694,6 +701,7 @@ export const db = {
                 updated.role,
                 updated.avatarUrl,
                 updated.isActivated,
+                updated.hasAcceptedTerms,
                 updated.activationToken ?? null,
                 updated.activationExpiresAt ?? null,
                 args.where.id

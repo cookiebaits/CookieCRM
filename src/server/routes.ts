@@ -227,6 +227,7 @@ apiRouter.post('/auth/google', async (req, res) => {
       name: user.name,
       avatarUrl: user.avatarUrl,
       role: assignedRole,
+      hasAcceptedTerms: Boolean(user.hasAcceptedTerms),
     };
 
     const token = generateToken(authUser);
@@ -238,6 +239,34 @@ apiRouter.post('/auth/google', async (req, res) => {
   }
 });
 
+// Accept Terms of Use & Privacy Policy
+apiRouter.post('/auth/accept-terms', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    const updatedUser = await db.user.update({
+      where: { id: req.user.id },
+      data: { hasAcceptedTerms: true },
+    });
+
+    const authUser = {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      avatarUrl: updatedUser.avatarUrl,
+      role: updatedUser.role,
+      hasAcceptedTerms: true,
+    };
+
+    return res.json({ user: authUser, message: 'Terms of Use and Privacy Policy accepted.' });
+  } catch (error) {
+    console.error('Accept terms error:', error);
+    return res.status(500).json({ error: 'Failed to record terms acceptance.' });
+  }
+});
+
 // Current User Session
 apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res) => {
   return res.json({ user: req.user });
@@ -246,6 +275,41 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res) => {
 // ==========================================
 // SCAMMERS & PIPELINE
 // ==========================================
+
+// Public endpoint for sharing scammer details (read-only, unauthenticated)
+apiRouter.get('/public/scammers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const scammer = await db.scammer.findUnique({
+      where: { id },
+      include: {
+        calls: {
+          orderBy: { date: 'desc' },
+        },
+        fraudAccounts: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!scammer) {
+      return res.status(404).json({ error: 'Scammer target case not found.' });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMinutes = scammer.calls
+      ? scammer.calls
+          .filter((c) => new Date(c.date) >= today)
+          .reduce((sum, c) => sum + (c.durationMinutes || 0), 0)
+      : 0;
+
+    return res.json({ scammer: { ...scammer, todayTimeSpent: todayMinutes } });
+  } catch (error) {
+    console.error('Public get scammer error:', error);
+    return res.status(500).json({ error: 'Failed to retrieve public scammer details.' });
+  }
+});
 
 // Get all scammers with calls and fraud accounts
 apiRouter.get('/scammers', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -319,6 +383,8 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
       return res.status(400).json({ error: 'Full Name and Phone Number are required.' });
     }
 
+    const initialMins = typeof totalTimeSpent === 'number' ? totalTimeSpent : Number(totalTimeSpent) || 0;
+
     const scammer = await db.scammer.create({
       data: {
         fullName: fullName.trim(),
@@ -328,7 +394,7 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
         scamType: scamType || 'Tech Support',
         organization: organization ? organization.trim() : null,
         notes: notes ? notes.trim() : null,
-        totalTimeSpent: typeof totalTimeSpent === 'number' ? totalTimeSpent : Number(totalTimeSpent) || 0,
+        totalTimeSpent: initialMins,
         targetValue: typeof targetValue === 'number' ? targetValue : Number(targetValue) || 0,
         priority: typeof priority === 'number' ? priority : Number(priority) || 1,
         carrier: carrier ? carrier.trim() : null,
@@ -343,7 +409,20 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
       },
     });
 
-    return res.status(201).json({ scammer: { ...scammer, todayTimeSpent: 0 } });
+    // Automatically create initial call log if initial time was specified so it counts towards all call aggregations
+    if (initialMins > 0) {
+      const initCall = await db.callLog.create({
+        data: {
+          scammerId: scammer.id,
+          durationMinutes: initialMins,
+          notes: 'Initial baiting time recorded on target creation',
+          date: new Date(),
+        },
+      });
+      scammer.calls = [initCall];
+    }
+
+    return res.status(201).json({ scammer: { ...scammer, todayTimeSpent: initialMins } });
   } catch (error) {
     console.error('Create scammer error:', error);
     return res.status(500).json({ error: 'Failed to create scammer.' });

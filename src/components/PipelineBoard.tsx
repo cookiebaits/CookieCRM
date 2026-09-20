@@ -129,7 +129,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
   const [inlineAddingCol, setInlineAddingCol] = useState<CanonicalStatus | null>(null);
   const [inlineTitle, setInlineTitle] = useState('');
   const [inlineScamType, setInlineScamType] = useState('Tech Support');
-  const [inlineDuration, setInlineDuration] = useState('30');
+  const [inlineDuration, setInlineDuration] = useState('0');
   const [inlinePhone, setInlinePhone] = useState('');
   const [inlineOrg, setInlineOrg] = useState('');
   const [inlinePriority, setInlinePriority] = useState<number>(2);
@@ -628,7 +628,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             setInlinePhone('');
                             setInlineOrg('');
                             setInlineScamType('Tech Support');
-                            setInlineDuration('30');
+                            setInlineDuration('0');
                             setInlinePriority(2);
                             setInlineError(null);
                           }}
@@ -743,7 +743,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           <input
                             type="number"
                             min="0"
-                            placeholder="30"
+                            placeholder="0"
                             value={inlineDuration}
                             onChange={(e) => setInlineDuration(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-amber-300 font-mono focus:outline-none focus:border-[#714B67]"
@@ -822,7 +822,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           onClick={() => {
                             setInlineAddingCol(col.status);
                             setInlineTitle('');
-                            setInlineDuration('30');
+                            setInlineDuration('0');
                           }}
                           className="mt-2 text-[11px] text-[#b47ea6] hover:underline flex items-center gap-1 font-medium"
                         >

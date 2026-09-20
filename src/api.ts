@@ -131,8 +131,25 @@ export const api = {
     return res;
   },
 
+  async acceptTerms(): Promise<{ user: User; message: string }> {
+    const res = await request<{ user: User; message: string }>('/api/auth/accept-terms', {
+      method: 'POST',
+    });
+    const storedUser = getStoredUser();
+    const token = getStoredToken();
+    if (storedUser && token) {
+      setSession(token, { ...storedUser, hasAcceptedTerms: true });
+    }
+    return res;
+  },
+
   async getMe(): Promise<{ user: User }> {
     return request<{ user: User }>('/api/auth/me');
+  },
+
+  // Public
+  async getPublicScammer(id: string): Promise<{ scammer: Scammer }> {
+    return request<{ scammer: Scammer }>(`/api/public/scammers/${id}`);
   },
 
   // Scammers

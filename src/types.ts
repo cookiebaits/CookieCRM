@@ -4,6 +4,7 @@ export interface User {
   name: string;
   avatarUrl?: string | null;
   role: string;
+  hasAcceptedTerms?: boolean;
 }
 
 export type PipelineStatus =

@@ -58,7 +58,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   // Call log form
   const [showAddCall, setShowAddCall] = useState(false);
-  const [callDuration, setCallDuration] = useState<number>(30);
+  const [callDuration, setCallDuration] = useState<number>(0);
   const [callDate, setCallDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [callPersona, setCallPersona] = useState('Grandma Gertrude');
   const [callNotes, setCallNotes] = useState('');
@@ -399,6 +399,16 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
           {/* Quick Action Controls */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => copyToClipboard(`${window.location.origin}/share/${scammer.id}`)}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border bg-slate-800 text-slate-200 border-slate-700 hover:text-white hover:bg-slate-750"
+              title="Copy shareable read-only public link"
+            >
+              <Copy className="w-3.5 h-3.5 text-amber-400" />
+              <span>{copySuccess ? 'Link Copied!' : 'Share Public Link'}</span>
+            </button>
+
             <button
               type="button"
               id="flag-scammer-btn"
