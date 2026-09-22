@@ -445,13 +445,36 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               onBlur={() => handleSaveScammerInfo()}
-              className="text-sm sm:text-base font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-rose-500 focus:outline-none tracking-tight"
+              placeholder="Main Name (e.g. John Son)"
+              className="text-sm sm:text-base font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-rose-500 focus:outline-none tracking-tight max-w-[150px] sm:max-w-[200px]"
             />
-            {scammer.alias && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-amber-400 font-mono border border-slate-700 hidden sm:inline-block">
-                &quot;{scammer.alias}&quot;
-              </span>
-            )}
+
+            {/* Input field for Alias right next to Main Name */}
+            <div className="flex items-center gap-1.5 bg-slate-950/80 px-2 py-1 rounded-lg border border-slate-800">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Alias:</span>
+              <input
+                type="text"
+                value={alias}
+                onChange={(e) => setAlias(e.target.value)}
+                onBlur={() => handleSaveScammerInfo()}
+                placeholder="e.g. Jaw Shun"
+                className="text-xs font-bold text-amber-400 bg-transparent border-b border-slate-700/80 focus:border-amber-400 focus:outline-none w-24 sm:w-32 font-mono"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Centered Scam Type / Organization Banner over Phone Numbers Column */}
+        <div className="hidden lg:flex items-center justify-center flex-1 px-4">
+          <div className="px-3.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-black text-xs tracking-wide shadow-sm flex items-center gap-2">
+            <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>
+              &quot;
+              {organization && scamType
+                ? `${organization} - ${scamType}`
+                : organization || scamType || 'Geek Tech Refund Scam'}
+              &quot;
+            </span>
           </div>
         </div>
 

@@ -863,11 +863,16 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             className="bg-slate-950 border border-slate-800/90 hover:border-slate-600 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-xl transition duration-150 relative group select-none space-y-2 border-l-4 hover:translate-y-[-1px]"
                             style={{ borderLeftColor: col.accentColor }}
                           >
-                            {/* Top Row: Target Name & Time Wasted */}
+                            {/* Top Row: Target Name/Alias & Time Wasted */}
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <h4 className="font-bold text-xs text-slate-100 truncate group-hover:text-amber-300 transition">
-                                  {scammer.fullName}
+                                <h4 className="font-bold text-xs text-slate-100 truncate group-hover:text-amber-300 transition flex items-center gap-1.5">
+                                  <span>{scammer.alias ? scammer.alias : scammer.fullName}</span>
+                                  {scammer.alias && (
+                                    <span className="text-[10px] text-slate-500 font-normal truncate">
+                                      ({scammer.fullName})
+                                    </span>
+                                  )}
                                 </h4>
                                 {scammer.organization && (
                                   <p className="text-[11px] text-slate-400 truncate flex items-center gap-1 mt-0.5">
@@ -1033,8 +1038,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                         className="hover:bg-slate-800/50 cursor-pointer transition"
                       >
                         <td className="px-4 py-3">
-                          <div className="font-bold text-white hover:text-amber-300 transition">
-                            {scammer.fullName}
+                          <div className="font-bold text-white hover:text-amber-300 transition flex items-center gap-1.5">
+                            <span>{scammer.alias ? scammer.alias : scammer.fullName}</span>
+                            {scammer.alias && (
+                              <span className="text-[10px] text-slate-500 font-normal">
+                                ({scammer.fullName})
+                              </span>
+                            )}
                           </div>
                           {scammer.organization && (
                             <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
