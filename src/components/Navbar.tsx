@@ -60,18 +60,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* View Toggle Tabs */}
-          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-sm font-bold">
             <button
               type="button"
               id="view-pipeline-btn"
               onClick={() => onChangeView('pipeline')}
-              className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition ${
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition ${
                 activeView === 'pipeline'
-                  ? 'bg-rose-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-rose-600 text-white shadow-md'
+                  : 'text-slate-300 hover:text-white'
               }`}
             >
-              <LayoutDashboard className="w-3.5 h-3.5" />
+              <LayoutDashboard className="w-4 h-4" />
               <span>Dashboard</span>
             </button>
 
@@ -79,13 +79,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="button"
               id="view-analytics-btn"
               onClick={() => onChangeView('analytics')}
-              className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition ${
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition ${
                 activeView === 'analytics'
-                  ? 'bg-rose-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-rose-600 text-white shadow-md'
+                  : 'text-slate-300 hover:text-white'
               }`}
             >
-              <BarChart3 className="w-3.5 h-3.5" />
+              <BarChart3 className="w-4 h-4" />
               <span>Monthly Analytics</span>
             </button>
 
@@ -95,15 +95,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 type="button"
                 id="view-users-btn"
                 onClick={() => onChangeView('users')}
-                className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition ${
+                className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition ${
                   activeView === 'users'
-                    ? 'bg-amber-600 text-white shadow'
-                    : 'text-amber-400/90 hover:text-amber-300'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'text-amber-400 hover:text-amber-300'
                 }`}
               >
-                <Users className="w-3.5 h-3.5" />
+                <Users className="w-4 h-4" />
                 <span>Manage Users</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
               </button>
             )}
           </div>
@@ -112,14 +112,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Center: Search & Filter */}
         <div className="flex-1 max-w-md hidden md:flex items-center gap-2">
           <div className="relative w-full">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
               id="search-scammers-input"
               placeholder="Search by name, alias, phone, or VoIP carrier..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm font-semibold text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
             />
           </div>
 
@@ -127,14 +127,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             id="filter-flagged-btn"
             onClick={onToggleFlagged}
-            className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition shrink-0 ${
+            className={`p-2 rounded-xl border text-sm font-bold flex items-center gap-1.5 transition shrink-0 ${
               flaggedOnly
                 ? 'bg-rose-500/20 text-rose-300 border-rose-500/50'
-                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
             }`}
             title="Filter by Flagged Fraudulent only"
           >
-            <ShieldAlert className="w-3.5 h-3.5" />
+            <ShieldAlert className="w-4 h-4" />
             <span className="hidden lg:inline">Flagged</span>
           </button>
         </div>
@@ -145,7 +145,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             id="nav-quick-add-btn"
             onClick={onOpenQuickAdd}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-semibold text-xs transition shadow-lg shadow-rose-950/50 flex items-center gap-1.5"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-sm transition shadow-lg shadow-rose-950/50 flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Add Scammer</span>
@@ -157,22 +157,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               <img
                 src={user.avatarUrl}
                 alt={user.name}
-                className="w-8 h-8 rounded-full border border-slate-700 object-cover"
+                className="w-9 h-9 rounded-full border-2 border-slate-700 object-cover"
               />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-300">
+              <div className="w-9 h-9 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-slate-300">
                 <UserIcon className="w-4 h-4" />
               </div>
             )}
 
             <div className="hidden lg:block text-left">
-              <div className="text-[15px] font-semibold text-slate-200 truncate max-w-[160px] flex items-center gap-1">
+              <div className="text-[17px] font-extrabold text-white truncate max-w-[170px] flex items-center gap-1">
                 <span>{user.name}</span>
                 {isAdmin && (
-                  <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" title="Administrator" />
+                  <Crown className="w-4 h-4 text-amber-400 shrink-0" title="Administrator" />
                 )}
               </div>
-              <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate max-w-[130px]">
+              <div className="text-[12px] font-semibold text-slate-400 flex items-center gap-1 truncate max-w-[140px]">
                 {isAdmin ? (
                   <span className="text-amber-400/90 font-medium">Admin CRM</span>
                 ) : isGmail ? (

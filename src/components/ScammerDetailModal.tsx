@@ -446,19 +446,19 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               onChange={(e) => setFullName(e.target.value)}
               onBlur={() => handleSaveScammerInfo()}
               placeholder="Main Name (e.g. John Son)"
-              className="text-sm sm:text-base font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-rose-500 focus:outline-none tracking-tight max-w-[150px] sm:max-w-[200px]"
+              className="text-base sm:text-lg font-extrabold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-rose-500 focus:outline-none tracking-tight max-w-[170px] sm:max-w-[220px]"
             />
 
             {/* Input field for Alias right next to Main Name */}
-            <div className="flex items-center gap-1.5 bg-slate-950/80 px-2 py-1 rounded-lg border border-slate-800">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Alias:</span>
+            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-700">
+              <span className="text-xs font-extrabold text-slate-300 uppercase tracking-wide">Alias:</span>
               <input
                 type="text"
                 value={alias}
                 onChange={(e) => setAlias(e.target.value)}
                 onBlur={() => handleSaveScammerInfo()}
                 placeholder="e.g. Jaw Shun"
-                className="text-xs font-bold text-amber-400 bg-transparent border-b border-slate-700/80 focus:border-amber-400 focus:outline-none w-24 sm:w-32 font-mono"
+                className="text-sm font-extrabold text-amber-300 bg-transparent border-b border-slate-600 focus:border-amber-400 focus:outline-none w-28 sm:w-36 font-mono"
               />
             </div>
           </div>
@@ -466,8 +466,8 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
         {/* Centered Scam Type / Organization Banner over Phone Numbers Column */}
         <div className="hidden lg:flex items-center justify-center flex-1 px-4">
-          <div className="px-3.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-black text-xs tracking-wide shadow-sm flex items-center gap-2">
-            <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <div className="px-4 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 font-black text-sm tracking-wide shadow-sm flex items-center gap-2">
+            <Building className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
               &quot;
               {organization && scamType
@@ -544,40 +544,40 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               <div className="grid grid-cols-3 gap-1.5">
                 {/* HH */}
                 <div>
-                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Hours (HH)</label>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5">Hours (HH)</label>
                   <input
                     type="number"
                     min="0"
                     max="24"
                     value={loggerHours}
                     onChange={(e) => setLoggerHours(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold text-center"
                   />
                 </div>
 
                 {/* MM */}
                 <div>
-                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Mins (MM)</label>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5">Mins (MM)</label>
                   <input
                     type="number"
                     min="0"
                     max="59"
                     value={loggerMins}
                     onChange={(e) => setLoggerMins(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold text-center"
                   />
                 </div>
 
                 {/* SS */}
                 <div>
-                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Secs (SS)</label>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5">Secs (SS)</label>
                   <input
                     type="number"
                     min="0"
                     max="59"
                     value={loggerSecs}
                     onChange={(e) => setLoggerSecs(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold text-center"
                   />
                 </div>
               </div>
@@ -585,36 +585,36 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               <div className="grid grid-cols-2 gap-1.5">
                 {/* Date Picker */}
                 <div>
-                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5 flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-amber-400" />
+                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
                     Call Date
                   </label>
                   <input
                     type="date"
                     value={loggerDate}
                     onChange={(e) => setLoggerDate(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 cursor-pointer"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 font-bold cursor-pointer"
                   />
                 </div>
 
                 {/* Persona */}
                 <div>
-                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Persona / Notes</label>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5">Persona / Notes</label>
                   <input
                     type="text"
                     placeholder="Grandma Gertrude"
                     value={loggerNotes}
                     onChange={(e) => setLoggerNotes(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-semibold"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow"
+                className="w-full py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition shadow"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4" />
                 <span>Log Call Entry</span>
               </button>
             </form>
@@ -623,20 +623,20 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           {/* Box 2: Stats Grid with Amount Wasted ($) */}
           <div className="grid grid-cols-4 gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl p-2 shadow text-center">
             <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
-              <p className="text-[9px] text-slate-400 font-semibold uppercase">Today</p>
-              <p className="text-xs font-bold text-emerald-400 mt-0.5">{formatDurationDisplay(todayMinutes)}</p>
+              <p className="text-[10px] text-slate-300 font-extrabold uppercase">Today</p>
+              <p className="text-sm font-black text-emerald-400 mt-0.5">{formatDurationDisplay(todayMinutes)}</p>
             </div>
             <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
-              <p className="text-[9px] text-slate-400 font-semibold uppercase">Wasted</p>
-              <p className="text-xs font-bold text-amber-300 mt-0.5">{formatDurationDisplay(totalMinutes)}</p>
+              <p className="text-[10px] text-slate-300 font-extrabold uppercase">Wasted</p>
+              <p className="text-sm font-black text-amber-300 mt-0.5">{formatDurationDisplay(totalMinutes)}</p>
             </div>
             <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
-              <p className="text-[9px] text-slate-400 font-semibold uppercase">Calls</p>
-              <p className="text-xs font-bold text-sky-400 mt-0.5">{totalCallsCount}</p>
+              <p className="text-[10px] text-slate-300 font-extrabold uppercase">Calls</p>
+              <p className="text-sm font-black text-sky-400 mt-0.5">{totalCallsCount}</p>
             </div>
             <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
-              <p className="text-[9px] text-slate-400 font-semibold uppercase">Amt Wasted</p>
-              <p className="text-xs font-bold text-rose-400 mt-0.5">${amountWastedDollars.toLocaleString()}</p>
+              <p className="text-[10px] text-slate-300 font-extrabold uppercase">Amt Wasted</p>
+              <p className="text-sm font-black text-rose-400 mt-0.5">${amountWastedDollars.toLocaleString()}</p>
             </div>
           </div>
 
