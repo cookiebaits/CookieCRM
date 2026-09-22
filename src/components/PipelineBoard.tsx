@@ -856,7 +856,6 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             draggable
                             onDragStart={(e) => handleDragStart(e, scammer.id)}
                             onClick={() => {
-                              window.open(`/target/${scammer.id}`, '_blank');
                               onSelectScammer(scammer);
                             }}
                             className="bg-slate-950 border border-slate-800/90 hover:border-slate-600 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-xl transition duration-150 relative group select-none space-y-2 border-l-4 hover:translate-y-[-1px]"
@@ -1028,7 +1027,6 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                       <tr
                         key={scammer.id}
                         onClick={() => {
-                          window.open(`/target/${scammer.id}`, '_blank');
                           onSelectScammer(scammer);
                         }}
                         className="hover:bg-slate-800/50 cursor-pointer transition"
