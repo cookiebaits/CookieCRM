@@ -366,6 +366,8 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
       fullName,
       alias,
       phoneNumber,
+      phoneNumbers,
+      whatsappNumber,
       status,
       scamType,
       organization,
@@ -384,12 +386,15 @@ apiRouter.post('/scammers', requireAuth, async (req: AuthenticatedRequest, res) 
     }
 
     const initialMins = typeof totalTimeSpent === 'number' ? totalTimeSpent : Number(totalTimeSpent) || 0;
+    const parsedPhoneNumbers = Array.isArray(phoneNumbers) ? phoneNumbers.filter(Boolean) : [phoneNumber.trim()];
 
     const scammer = await db.scammer.create({
       data: {
         fullName: fullName.trim(),
         alias: alias ? alias.trim() : null,
         phoneNumber: phoneNumber.trim(),
+        phoneNumbers: parsedPhoneNumbers,
+        whatsappNumber: whatsappNumber ? whatsappNumber.trim() : null,
         status: status || 'New',
         scamType: scamType || 'Tech Support',
         organization: organization ? organization.trim() : null,
@@ -500,6 +505,8 @@ apiRouter.put('/scammers/:id', requireAuth, async (req, res) => {
       fullName,
       alias,
       phoneNumber,
+      phoneNumbers,
+      whatsappNumber,
       status,
       carrier,
       location,
@@ -521,6 +528,8 @@ apiRouter.put('/scammers/:id', requireAuth, async (req, res) => {
         ...(fullName !== undefined && { fullName }),
         ...(alias !== undefined && { alias }),
         ...(phoneNumber !== undefined && { phoneNumber }),
+        ...(phoneNumbers !== undefined && { phoneNumbers: Array.isArray(phoneNumbers) ? phoneNumbers : [phoneNumber] }),
+        ...(whatsappNumber !== undefined && { whatsappNumber }),
         ...(status !== undefined && { status }),
         ...(carrier !== undefined && { carrier }),
         ...(location !== undefined && { location }),

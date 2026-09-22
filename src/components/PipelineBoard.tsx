@@ -24,6 +24,7 @@ import {
   Zap,
   ShieldCheck,
   Timer,
+  Flag,
 } from 'lucide-react';
 import type { Scammer, PipelineStatus, CanonicalStatus } from '../types.ts';
 import { toCanonicalStatus } from '../types.ts';
@@ -306,6 +307,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
   // Quick Flag toggle click handler
   const handleToggleFlagged = (e: React.MouseEvent, scammer: Scammer) => {
     e.stopPropagation();
+    e.preventDefault();
     if (onUpdateScammer) {
       onUpdateScammer(scammer.id, { flagged: !scammer.flagged });
     }
@@ -855,7 +857,9 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             key={scammer.id}
                             draggable
                             onDragStart={(e) => handleDragStart(e, scammer.id)}
-                            onClick={() => onSelectScammer(scammer)}
+                            onClick={() => {
+                              onSelectScammer(scammer);
+                            }}
                             className="bg-slate-950 border border-slate-800/90 hover:border-slate-600 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-xl transition duration-150 relative group select-none space-y-2 border-l-4 hover:translate-y-[-1px]"
                             style={{ borderLeftColor: col.accentColor }}
                           >
@@ -902,14 +906,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                 type="button"
                                 onClick={(e) => handleToggleFlagged(e, scammer)}
                                 title={scammer.flagged ? "Flagged target (Click to unflag)" : "Click to quick flag target"}
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-bold transition flex items-center gap-1 border ${
+                                className={`p-1 rounded font-bold transition flex items-center justify-center border ${
                                   scammer.flagged
                                     ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 hover:bg-rose-500/30'
                                     : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:border-rose-500/30'
                                 }`}
                               >
-                                <ShieldAlert className={`w-2.5 h-2.5 ${scammer.flagged ? 'text-rose-400' : 'text-slate-500'}`} />
-                                <span>{scammer.flagged ? 'Flagged' : 'Flag'}</span>
+                                <Flag className={`w-3 h-3 ${scammer.flagged ? 'text-rose-400 fill-rose-400' : 'text-slate-500'}`} />
                               </button>
                             </div>
 
@@ -1024,7 +1027,9 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                     return (
                       <tr
                         key={scammer.id}
-                        onClick={() => onSelectScammer(scammer)}
+                        onClick={() => {
+                          onSelectScammer(scammer);
+                        }}
                         className="hover:bg-slate-800/50 cursor-pointer transition"
                       >
                         <td className="px-4 py-3">

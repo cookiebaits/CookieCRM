@@ -12,6 +12,80 @@ import { PublicScammerView } from './components/PublicScammerView.tsx';
 import { TermsAndPrivacyModal } from './components/TermsAndPrivacyModal.tsx';
 import type { User, Scammer, PipelineStatus, CanonicalStatus } from './types.ts';
 
+function StandaloneTargetPage({
+  targetId,
+  currentUser,
+  onUpdateScammer,
+  onDeleteScammer,
+}: {
+  targetId: string;
+  currentUser: User | null;
+  onUpdateScammer: (scammer: Scammer) => void;
+  onDeleteScammer: (id: string) => void;
+}) {
+  const [scammer, setScammer] = useState<Scammer | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getScammer(targetId)
+      .then((res) => {
+        setScammer(res.scammer);
+      })
+      .catch((err: any) => {
+        setError(err.message || 'Target not found');
+      })
+      .finally(() => setLoading(false));
+  }, [targetId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
+        <div className="w-8 h-8 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin mb-3"></div>
+        <span className="text-xs font-mono">Loading Scammer Target Dossier...</span>
+      </div>
+    );
+  }
+
+  if (error || !scammer) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 p-6 text-center">
+        <AlertCircle className="w-10 h-10 text-rose-500 mb-3" />
+        <p className="text-sm text-slate-200 font-bold mb-1">Target Dossier Error</p>
+        <p className="text-xs text-slate-400 max-w-sm mb-4">{error || 'Scammer record not found.'}</p>
+        <button
+          type="button"
+          onClick={() => window.close()}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold"
+        >
+          Close Window
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-3 sm:p-6 max-w-[1800px] mx-auto">
+      <ScammerDetailModal
+        scammer={scammer}
+        isOpen={true}
+        isStandalone={true}
+        onClose={() => window.close()}
+        onUpdateScammer={(updated) => {
+          setScammer(updated);
+          onUpdateScammer(updated);
+        }}
+        onDeleteScammer={(id) => {
+          onDeleteScammer(id);
+          window.close();
+        }}
+        currentUser={currentUser}
+      />
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(getStoredUser());
   const [authChecking, setAuthChecking] = useState<boolean>(true);
@@ -34,7 +108,7 @@ export default function App() {
   const [flaggedOnly, setFlaggedOnly] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
-  // Check for public share route (/share/:id or ?share=:id)
+  // Check for public share route (/share/:id or ?share=:id) or target route (/target/:id or ?target=:id)
   const [publicShareId, setPublicShareId] = useState<string | null>(() => {
     const pathname = window.location.pathname;
     if (pathname.startsWith('/share/')) {
@@ -42,6 +116,15 @@ export default function App() {
     }
     const params = new URLSearchParams(window.location.search);
     return params.get('share') || null;
+  });
+
+  const [targetDetailId, setTargetDetailId] = useState<string | null>(() => {
+    const pathname = window.location.pathname;
+    if (pathname.startsWith('/target/')) {
+      return pathname.replace('/target/', '').trim();
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get('target') || null;
   });
 
   const isAdmin = user?.role === 'admin' || user?.role === 'admin_scambaiter';
@@ -256,6 +339,40 @@ export default function App() {
           window.history.replaceState({}, document.title, '/');
           setPublicShareId(null);
         }}
+      />
+    );
+  }
+
+  // If viewing standalone target page in a dedicated window/tab (/target/:id)
+  if (targetDetailId) {
+    const foundScammer = scammers.find((s) => s.id === targetDetailId) || selectedScammer;
+    if (foundScammer && foundScammer.id === targetDetailId) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 max-w-[1800px] mx-auto">
+          <ScammerDetailModal
+            scammer={foundScammer}
+            isOpen={true}
+            isStandalone={true}
+            onClose={() => {
+              window.close();
+            }}
+            onUpdateScammer={handleUpdateScammer}
+            onDeleteScammer={(id) => {
+              handleDeleteScammer(id);
+              window.close();
+            }}
+            currentUser={user}
+          />
+        </div>
+      );
+    }
+    // Fetch scammer if not loaded yet
+    return (
+      <StandaloneTargetPage
+        targetId={targetDetailId}
+        currentUser={user}
+        onUpdateScammer={handleUpdateScammer}
+        onDeleteScammer={handleDeleteScammer}
       />
     );
   }

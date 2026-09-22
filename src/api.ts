@@ -157,6 +157,10 @@ export const api = {
     return request<{ scammers: Scammer[] }>('/api/scammers');
   },
 
+  async getScammer(id: string): Promise<{ scammer: Scammer }> {
+    return request<{ scammer: Scammer }>(`/api/public/scammers/${id}`);
+  },
+
   async createScammer(data: {
     fullName: string;
     alias?: string;

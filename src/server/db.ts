@@ -27,6 +27,8 @@ export interface ScammerRecord {
   fullName: string;
   alias?: string | null;
   phoneNumber: string;
+  phoneNumbers?: string[];
+  whatsappNumber?: string | null;
   status: string;
   carrier?: string | null;
   location?: string | null;
@@ -344,6 +346,8 @@ async function initSupabaseDirectSchema() {
       ALTER TABLE scammers ADD COLUMN IF NOT EXISTS location VARCHAR(255);
       ALTER TABLE scammers ADD COLUMN IF NOT EXISTS organization VARCHAR(255);
       ALTER TABLE scammers ADD COLUMN IF NOT EXISTS user_id VARCHAR(64);
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS phone_numbers TEXT[];
+      ALTER TABLE scammers ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(100);
 
       -- Ensure all columns on call_logs table exist
       ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS audio_recording_url TEXT;
@@ -388,6 +392,14 @@ function mapScammerRow(row: any): ScammerRecord {
     fullName: row.full_name,
     alias: row.alias,
     phoneNumber: row.phone_number,
+    phoneNumbers: Array.isArray(row.phone_numbers)
+      ? row.phone_numbers
+      : row.phone_numbers
+      ? typeof row.phone_numbers === 'string'
+        ? JSON.parse(row.phone_numbers)
+        : []
+      : [],
+    whatsappNumber: row.whatsapp_number || null,
     status: row.status,
     carrier: row.carrier,
     location: row.location,
@@ -897,6 +909,8 @@ export const db = {
         fullName: args.data.fullName,
         alias: args.data.alias || null,
         phoneNumber: args.data.phoneNumber,
+        phoneNumbers: Array.isArray(args.data.phoneNumbers) ? args.data.phoneNumbers : [args.data.phoneNumber],
+        whatsappNumber: args.data.whatsappNumber || null,
         status: args.data.status || 'New Scammer',
         carrier: args.data.carrier || null,
         location: args.data.location || null,
@@ -930,15 +944,17 @@ export const db = {
 
           await pgPool.query(
             `INSERT INTO scammers (
-               id, full_name, alias, phone_number, status, carrier, location,
+               id, full_name, alias, phone_number, phone_numbers, whatsapp_number, status, carrier, location,
                scam_type, organization, flagged, danger_level, victim_given_info,
                remote_access_id, ip_address, notes, total_time_spent, target_value,
                priority, created_at, updated_at, user_id
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
              ON CONFLICT (id) DO UPDATE SET
                full_name = EXCLUDED.full_name,
                alias = EXCLUDED.alias,
                phone_number = EXCLUDED.phone_number,
+               phone_numbers = EXCLUDED.phone_numbers,
+               whatsapp_number = EXCLUDED.whatsapp_number,
                status = EXCLUDED.status,
                carrier = EXCLUDED.carrier,
                location = EXCLUDED.location,
@@ -956,7 +972,8 @@ export const db = {
                updated_at = NOW(),
                user_id = EXCLUDED.user_id`,
             [
-              scammer.id, scammer.fullName, scammer.alias, scammer.phoneNumber, scammer.status,
+              scammer.id, scammer.fullName, scammer.alias, scammer.phoneNumber,
+              scammer.phoneNumbers, scammer.whatsappNumber, scammer.status,
               scammer.carrier, scammer.location, scammer.scamType, scammer.organization,
               scammer.flagged, scammer.dangerLevel, scammer.victimGivenInfo, scammer.remoteAccessId,
               scammer.ipAddress, scammer.notes, scammer.totalTimeSpent, scammer.targetValue,
@@ -994,24 +1011,27 @@ export const db = {
                full_name = COALESCE($1, full_name),
                alias = COALESCE($2, alias),
                phone_number = COALESCE($3, phone_number),
-               status = COALESCE($4, status),
-               carrier = COALESCE($5, carrier),
-               location = COALESCE($6, location),
-               scam_type = COALESCE($7, scam_type),
-               organization = COALESCE($8, organization),
-               flagged = COALESCE($9, flagged),
-               danger_level = COALESCE($10, danger_level),
-               victim_given_info = COALESCE($11, victim_given_info),
-               remote_access_id = COALESCE($12, remote_access_id),
-               ip_address = COALESCE($13, ip_address),
-               notes = COALESCE($14, notes),
-               total_time_spent = COALESCE($15, total_time_spent),
-               target_value = COALESCE($16, target_value),
-               priority = COALESCE($17, priority),
+               phone_numbers = COALESCE($4, phone_numbers),
+               whatsapp_number = COALESCE($5, whatsapp_number),
+               status = COALESCE($6, status),
+               carrier = COALESCE($7, carrier),
+               location = COALESCE($8, location),
+               scam_type = COALESCE($9, scam_type),
+               organization = COALESCE($10, organization),
+               flagged = COALESCE($11, flagged),
+               danger_level = COALESCE($12, danger_level),
+               victim_given_info = COALESCE($13, victim_given_info),
+               remote_access_id = COALESCE($14, remote_access_id),
+               ip_address = COALESCE($15, ip_address),
+               notes = COALESCE($16, notes),
+               total_time_spent = COALESCE($17, total_time_spent),
+               target_value = COALESCE($18, target_value),
+               priority = COALESCE($19, priority),
                updated_at = NOW()
-             WHERE id = $18`,
+             WHERE id = $20`,
             [
-              updated.fullName, updated.alias, updated.phoneNumber, updated.status,
+              updated.fullName, updated.alias, updated.phoneNumber,
+              updated.phoneNumbers, updated.whatsappNumber, updated.status,
               updated.carrier, updated.location, updated.scamType, updated.organization,
               updated.flagged, updated.dangerLevel, updated.victimGivenInfo, updated.remoteAccessId,
               updated.ipAddress, updated.notes, updated.totalTimeSpent, updated.targetValue,
