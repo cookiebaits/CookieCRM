@@ -24,6 +24,7 @@ import {
   Zap,
   ShieldCheck,
   Timer,
+  Flag,
 } from 'lucide-react';
 import type { Scammer, PipelineStatus, CanonicalStatus } from '../types.ts';
 import { toCanonicalStatus } from '../types.ts';
@@ -306,6 +307,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
   // Quick Flag toggle click handler
   const handleToggleFlagged = (e: React.MouseEvent, scammer: Scammer) => {
     e.stopPropagation();
+    e.preventDefault();
     if (onUpdateScammer) {
       onUpdateScammer(scammer.id, { flagged: !scammer.flagged });
     }
@@ -904,14 +906,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                 type="button"
                                 onClick={(e) => handleToggleFlagged(e, scammer)}
                                 title={scammer.flagged ? "Flagged target (Click to unflag)" : "Click to quick flag target"}
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-bold transition flex items-center gap-1 border ${
+                                className={`p-1 rounded font-bold transition flex items-center justify-center border ${
                                   scammer.flagged
                                     ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 hover:bg-rose-500/30'
                                     : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:border-rose-500/30'
                                 }`}
                               >
-                                <ShieldAlert className={`w-2.5 h-2.5 ${scammer.flagged ? 'text-rose-400' : 'text-slate-500'}`} />
-                                <span>{scammer.flagged ? 'Flagged' : 'Flag'}</span>
+                                <Flag className={`w-3 h-3 ${scammer.flagged ? 'text-rose-400 fill-rose-400' : 'text-slate-500'}`} />
                               </button>
                             </div>
 

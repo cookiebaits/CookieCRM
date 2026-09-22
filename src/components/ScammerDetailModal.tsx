@@ -20,11 +20,27 @@ import {
   Globe,
   MessageCircle,
   ArrowLeft,
+  Flag,
+  Image as ImageIcon,
+  FileAudio,
+  Eye,
+  Edit3,
+  Play,
+  Volume2,
 } from 'lucide-react';
 import { api, getStoredUser } from '../api.ts';
 import { AudioPlayerWidget } from './AudioPlayerWidget.tsx';
-import { CallTimerWidget } from './CallTimerWidget.tsx';
 import type { Scammer, PipelineStatus, User, FraudAccount } from '../types.ts';
+
+interface EvidenceMediaItem {
+  id: string;
+  name: string;
+  url: string;
+  type: 'image' | 'audio';
+  fileType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+}
 
 interface ScammerDetailModalProps {
   scammer: Scammer;
@@ -62,9 +78,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [notes, setNotes] = useState(scammer.notes || '');
 
   // Phone Numbers (up to 4) & WhatsApp
-  const initialPhones = Array.isArray(scammer.phoneNumbers) && scammer.phoneNumbers.length > 0
-    ? scammer.phoneNumbers
-    : [scammer.phoneNumber];
+  const initialPhones =
+    Array.isArray(scammer.phoneNumbers) && scammer.phoneNumbers.length > 0
+      ? scammer.phoneNumbers
+      : [scammer.phoneNumber];
 
   const [phoneList, setPhoneList] = useState<string[]>(() => {
     const list = [...initialPhones];
@@ -74,22 +91,13 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   const [whatsappNumber, setWhatsappNumber] = useState(scammer.whatsappNumber || '');
 
-  // Call log form
-  const [showAddCall, setShowAddCall] = useState(false);
-  const [callDuration, setCallDuration] = useState<number>(0);
-  const [callDate, setCallDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [callPersona, setCallPersona] = useState('Grandma Gertrude');
-  const [callNotes, setCallNotes] = useState('');
-  const [callInfoGiven, setCallInfoGiven] = useState('');
-  const [callOutcome, setCallOutcome] = useState('');
-  const [audioFileName, setAudioFileName] = useState('');
-  const [audioFileData, setAudioFileData] = useState('');
-  const [audioError, setAudioError] = useState<string | null>(null);
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
-
-  // Editing existing call
-  const [editingCallId, setEditingCallId] = useState<string | null>(null);
-  const [editingDuration, setEditingDuration] = useState<number>(0);
+  // Quick Call Logger State (HH:MM:SS & Date Picker)
+  const [loggerHours, setLoggerHours] = useState<number>(0);
+  const [loggerMins, setLoggerMins] = useState<number>(0);
+  const [loggerSecs, setLoggerSecs] = useState<number>(0);
+  const [loggerDate, setLoggerDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [loggerNotes, setLoggerNotes] = useState('');
+  const [loggerPersona, setLoggerPersona] = useState('');
 
   // Receiver Accounts / Reported Assets form
   const [showAddFraud, setShowAddFraud] = useState(false);
@@ -97,6 +105,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [fraudDetails, setFraudDetails] = useState('');
   const [fraudInstitution, setFraudInstitution] = useState('');
   const [fraudHolder, setFraudHolder] = useState('');
+
+  // Evidence & Media State
+  const [evidenceMedia, setEvidenceMedia] = useState<EvidenceMediaItem[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [editingMediaId, setEditingMediaId] = useState<string | null>(null);
+  const [editingMediaName, setEditingMediaName] = useState<string>('');
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [isDraggingMedia, setIsDraggingMedia] = useState(false);
 
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -154,116 +170,22 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     await handleSaveScammerInfo({ flagged: nextFlag });
   };
 
-  // Audio File Processing
-  const processAudioFile = (file: File) => {
-    if (!file.type.startsWith('audio/')) {
-      setAudioError('Please select a valid audio file (.wav, .mp3, .m4a, .ogg, .webm).');
-      return;
-    }
-
-    const objectUrl = URL.createObjectURL(file);
-    const audioObj = new Audio();
-    audioObj.src = objectUrl;
-
-    audioObj.onloadedmetadata = () => {
-      const durationSec = audioObj.duration;
-      URL.revokeObjectURL(objectUrl);
-
-      const userEmail = (currentUser?.email || getStoredUser()?.email || '').toLowerCase().trim();
-      const isAdminExempt = userEmail === 'cookiescambait@gmail.com';
-
-      if (durationSec > 90 && !isAdminExempt) {
-        setAudioError(
-          `Audio recording is ${Math.round(durationSec)}s long (${(durationSec / 60).toFixed(
-            1
-          )} mins). Audio clips must be less than 1.5 minutes (90 seconds). Admin account cookiescambait@gmail.com is exempt.`
-        );
-        setAudioFileData('');
-        setAudioFileName('');
-        return;
-      }
-
-      setAudioError(null);
-      setAudioFileName(file.name || 'recording.wav');
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        setAudioFileData(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    };
-
-    audioObj.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      setAudioError(null);
-      setAudioFileName(file.name || 'recording.wav');
-      const reader = new FileReader();
-      reader.onload = () => {
-        setAudioFileData(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    };
-  };
-
-  // Drag & drop handlers for audio
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOver(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        if (files[i].type.startsWith('audio/')) {
-          processAudioFile(files[i]);
-          break;
-        }
-      }
-    }
-  };
-
-  // Paste handler for clipboard audio
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === 'file' && item.type.startsWith('audio/')) {
-        const file = item.getAsFile();
-        if (file) {
-          e.preventDefault();
-          processAudioFile(file);
-          break;
-        }
-      }
-    }
-  };
-
-  // Add Call Log
-  const handleAddCallLog = async (e?: React.FormEvent) => {
+  // Quick Call Logger Submission
+  const handleQuickLogCall = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    const h = Math.max(0, Number(loggerHours) || 0);
+    const m = Math.max(0, Number(loggerMins) || 0);
+    const s = Math.max(0, Number(loggerSecs) || 0);
+
+    const totalMinsCalculated = Math.round(h * 60 + m + s / 60);
+    const durationMinutes = totalMinsCalculated > 0 ? totalMinsCalculated : 1;
+
     try {
       const res = await api.addCall(scammer.id, {
-        durationMinutes: callDuration,
-        date: callDate ? new Date(callDate).toISOString() : new Date().toISOString(),
-        notes: callNotes,
-        victimPersonaUsed: callPersona,
-        infoGiven: callInfoGiven,
-        outcome: callOutcome,
-        audioRecordingName: audioFileName || (audioFileData ? 'recording.wav' : undefined),
-        audioRecordingUrl: audioFileData || undefined,
+        durationMinutes,
+        date: loggerDate ? new Date(loggerDate).toISOString() : new Date().toISOString(),
+        notes: loggerNotes.trim() || undefined,
+        victimPersonaUsed: loggerPersona.trim() || undefined,
       });
 
       const updatedCalls = [res.call, ...scammer.calls];
@@ -275,37 +197,15 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       };
       onUpdateScammer(updatedScammer);
 
-      setShowAddCall(false);
-      setCallNotes('');
-      setCallInfoGiven('');
-      setCallOutcome('');
-      setAudioFileData('');
-      setAudioFileName('');
-      setAudioError(null);
-      setCallDate(new Date().toISOString().split('T')[0]);
+      // Reset form
+      setLoggerHours(0);
+      setLoggerMins(0);
+      setLoggerSecs(0);
+      setLoggerNotes('');
+      setLoggerPersona('');
+      setLoggerDate(new Date().toISOString().split('T')[0]);
     } catch (err) {
-      console.error('Add call log error:', err);
-    }
-  };
-
-  // Update Call Duration
-  const handleSaveCallDuration = async (callId: string) => {
-    try {
-      const res = await api.updateCall(scammer.id, callId, {
-        durationMinutes: editingDuration,
-      });
-
-      const updatedCalls = scammer.calls.map((c) => (c.id === callId ? res.call : c));
-      const updatedScammer: Scammer = {
-        ...scammer,
-        calls: updatedCalls,
-        totalTimeSpent: res.scammerTotalMinutes,
-        todayTimeSpent: res.todayMinutes,
-      };
-      onUpdateScammer(updatedScammer);
-      setEditingCallId(null);
-    } catch (err) {
-      console.error('Update call duration error:', err);
+      console.error('Quick call log error:', err);
     }
   };
 
@@ -375,6 +275,104 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     }
   };
 
+  // Process Evidence & Media File (Image & Audio with 3MB Limit, Admin Exempt)
+  const processMediaFile = (file: File) => {
+    const isImage = file.type.startsWith('image/');
+    const isAudio = file.type.startsWith('audio/');
+
+    if (!isImage && !isAudio) {
+      setMediaError('Only image (.png, .jpg, .webp, .gif) and audio (.mp3, .wav, .m4a, .webm) files are supported.');
+      return;
+    }
+
+    const userEmail = (currentUser?.email || getStoredUser()?.email || '').toLowerCase().trim();
+    const isAdminExempt = userEmail === 'cookiescambait@gmail.com';
+    const maxBytes = 3 * 1024 * 1024; // 3MB
+
+    if (file.size > maxBytes && !isAdminExempt) {
+      setMediaError(
+        `File "${file.name}" is ${(file.size / (1024 * 1024)).toFixed(
+          1
+        )}MB. Maximum size is 3MB. Admin account cookiescambait@gmail.com is exempt.`
+      );
+      return;
+    }
+
+    setMediaError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const newItem: EvidenceMediaItem = {
+        id: crypto.randomUUID(),
+        name: file.name,
+        url: dataUrl,
+        type: isImage ? 'image' : 'audio',
+        fileType: file.type,
+        sizeBytes: file.size,
+        uploadedAt: new Date().toISOString(),
+      };
+      setEvidenceMedia((prev) => [newItem, ...prev]);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Drag & drop handlers for Evidence Media
+  const handleMediaDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingMedia(true);
+  };
+
+  const handleMediaDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingMedia(false);
+  };
+
+  const handleMediaDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingMedia(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        processMediaFile(files[i]);
+      }
+    }
+  };
+
+  // Clipboard Paste Handler for Media
+  const handleMediaPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file && (file.type.startsWith('image/') || file.type.startsWith('audio/'))) {
+          e.preventDefault();
+          processMediaFile(file);
+        }
+      }
+    }
+  };
+
+  // Save renamed media asset
+  const handleSaveMediaName = (id: string) => {
+    if (!editingMediaName.trim()) return;
+    setEvidenceMedia((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, name: editingMediaName.trim() } : m))
+    );
+    setEditingMediaId(null);
+    setEditingMediaName('');
+  };
+
+  // Delete media asset
+  const handleDeleteMedia = (id: string) => {
+    setEvidenceMedia((prev) => prev.filter((m) => m.id !== id));
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopySuccess(true);
@@ -391,10 +389,35 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     return type.replace(/_/g, ' ');
   };
 
+  // Dynamic Call Log Stats Calculation
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const todayMinutes = scammer.calls
+    ? scammer.calls
+        .filter((c) => new Date(c.date) >= startOfToday)
+        .reduce((sum, c) => sum + (c.durationMinutes || 0), 0)
+    : 0;
+
+  const totalMinutes = scammer.calls
+    ? scammer.calls.reduce((sum, c) => sum + (c.durationMinutes || 0), 0)
+    : scammer.totalTimeSpent || 0;
+
+  const totalCallsCount = scammer.calls ? scammer.calls.length : 0;
+  const amountWastedDollars = Math.round((totalMinutes / 60) * 850);
+
+  const formatDurationDisplay = (mins: number) => {
+    if (!mins || mins <= 0) return '0m';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h === 0) return `${m}m`;
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col p-2 sm:p-3 gap-2.5 overflow-hidden antialiased">
       {/* Navigation Top Header Bar */}
-      <header className="bg-slate-900/90 border border-slate-800/90 rounded-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
+      <header className="bg-slate-900/90 border border-slate-800/90 rounded-xl px-3.5 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -415,7 +438,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   : 'bg-slate-800 text-slate-300'
               }`}
             >
-              {flagged ? <ShieldAlert className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+              <Flag className={`w-4 h-4 ${flagged ? 'text-rose-400 fill-rose-400' : ''}`} />
             </div>
             <input
               type="text"
@@ -435,9 +458,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800 font-mono">
             <Clock className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-emerald-400 font-bold">{scammer.todayTimeSpent || 0}m Today</span>
+            <span className="text-emerald-400 font-bold">{todayMinutes}m Today</span>
             <span className="text-slate-600">|</span>
-            <span>{scammer.totalTimeSpent}m Total</span>
+            <span>{totalMinutes}m Total</span>
           </div>
 
           <button
@@ -458,7 +481,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
             }`}
           >
-            <AlertTriangle className="w-3.5 h-3.5" />
+            <Flag className={`w-3.5 h-3.5 ${flagged ? 'text-rose-400 fill-rose-400' : ''}`} />
             <span className="hidden sm:inline">{flagged ? 'Flagged' : 'Flag Target'}</span>
           </button>
 
@@ -480,38 +503,420 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
       {/* Main Single-Page 3-Column Scroll-less Grid Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 items-stretch">
-        {/* COLUMN 1 (Col Span 3): Stopwatch, Metrics & Receiver Accounts */}
-        <div className="lg:col-span-3 flex flex-col gap-2.5">
-          {/* Live Call Timer */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 shadow">
-            <CallTimerWidget
-              scammerName={scammer.fullName}
-              onLogCompletedCall={(minutes) => {
-                setCallDuration(minutes);
-                setShowAddCall(true);
-              }}
-            />
+        {/* COLUMN 1 (Col Span 3.5): Quick Call Logger, Stats Grid & Call Logs List */}
+        <div className="lg:col-span-4 flex flex-col gap-2 shadow">
+          {/* Box 1: Quick Call Logger (HH:MM:SS + Date Picker + Add Button) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 space-y-2 shadow">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-rose-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Call Logger
+                </h3>
+              </div>
+              <span className="text-[10px] text-slate-400">Manual Entry</span>
+            </div>
+
+            <form onSubmit={handleQuickLogCall} className="space-y-2 text-xs">
+              <div className="grid grid-cols-3 gap-1.5">
+                {/* HH */}
+                <div>
+                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Hours (HH)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="24"
+                    value={loggerHours}
+                    onChange={(e) => setLoggerHours(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                  />
+                </div>
+
+                {/* MM */}
+                <div>
+                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Mins (MM)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={loggerMins}
+                    onChange={(e) => setLoggerMins(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                  />
+                </div>
+
+                {/* SS */}
+                <div>
+                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Secs (SS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={loggerSecs}
+                    onChange={(e) => setLoggerSecs(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                {/* Date Picker */}
+                <div>
+                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5 flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-amber-400" />
+                    Call Date
+                  </label>
+                  <input
+                    type="date"
+                    value={loggerDate}
+                    onChange={(e) => setLoggerDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 cursor-pointer"
+                  />
+                </div>
+
+                {/* Persona */}
+                <div>
+                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Persona / Notes</label>
+                  <input
+                    type="text"
+                    placeholder="Grandma Gertrude"
+                    value={loggerNotes}
+                    onChange={(e) => setLoggerNotes(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Log Call Entry</span>
+              </button>
+            </form>
           </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
-              <p className="text-[10px] text-slate-400 font-medium uppercase">Today</p>
-              <p className="text-sm font-bold text-emerald-400 mt-0.5">{scammer.todayTimeSpent || 0}m</p>
+          {/* Box 2: Stats Grid with Amount Wasted ($) */}
+          <div className="grid grid-cols-4 gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl p-2 shadow text-center">
+            <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
+              <p className="text-[9px] text-slate-400 font-semibold uppercase">Today</p>
+              <p className="text-xs font-bold text-emerald-400 mt-0.5">{formatDurationDisplay(todayMinutes)}</p>
             </div>
-            <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
-              <p className="text-[10px] text-slate-400 font-medium uppercase">Wasted</p>
-              <p className="text-sm font-bold text-slate-100 mt-0.5">{scammer.totalTimeSpent}m</p>
+            <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
+              <p className="text-[9px] text-slate-400 font-semibold uppercase">Wasted</p>
+              <p className="text-xs font-bold text-amber-300 mt-0.5">{formatDurationDisplay(totalMinutes)}</p>
             </div>
-            <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
-              <p className="text-[10px] text-slate-400 font-medium uppercase">Calls</p>
-              <p className="text-sm font-bold text-amber-400 mt-0.5">{scammer.calls.length}</p>
+            <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
+              <p className="text-[9px] text-slate-400 font-semibold uppercase">Calls</p>
+              <p className="text-xs font-bold text-sky-400 mt-0.5">{totalCallsCount}</p>
+            </div>
+            <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
+              <p className="text-[9px] text-slate-400 font-semibold uppercase">Amt Wasted</p>
+              <p className="text-xs font-bold text-rose-400 mt-0.5">${amountWastedDollars.toLocaleString()}</p>
             </div>
           </div>
 
-          {/* Receiver Accounts & Reported Assets */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col flex-1 shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+          {/* Box 3: Call Logs List (Moved to Column 1 bottom as per P4) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col flex-1 shadow min-h-[180px]">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Call Logs ({totalCallsCount})
+                </h3>
+              </div>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto max-h-[220px] flex-1 pr-1">
+              {totalCallsCount === 0 ? (
+                <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-[11px] p-3">
+                  No call logs recorded yet. Use the Call Logger above to record call sessions.
+                </div>
+              ) : (
+                scammer.calls.map((call) => (
+                  <div
+                    key={call.id}
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1 hover:border-slate-700 transition"
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold font-mono text-[10px] border border-rose-500/30">
+                          {call.durationMinutes}m
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {new Date(call.date).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+                        {call.victimPersonaUsed && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-800 truncate max-w-[100px]">
+                            {call.victimPersonaUsed}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCall(call.id)}
+                        className="text-slate-500 hover:text-rose-400 p-0.5"
+                        title="Delete call"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {call.notes && (
+                      <p className="text-[11px] text-slate-300 leading-snug">{call.notes}</p>
+                    )}
+
+                    {call.audioRecordingUrl && (
+                      <AudioPlayerWidget
+                        audioUrl={call.audioRecordingUrl}
+                        audioName={call.audioRecordingName}
+                      />
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* COLUMN 2 (Col Span 4.5): Phone Numbers, WhatsApp & Case Dossier Profile */}
+        <div className="lg:col-span-4 flex flex-col gap-2.5">
+          {/* Phone Numbers & WhatsApp Intel */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2 shadow">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Phone Numbers &amp; WhatsApp Intel
+                </h3>
+              </div>
+              <span className="text-[10px] text-slate-400">4 Phones + 1 WhatsApp</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              {[0, 1, 2, 3].map((idx) => (
+                <div key={idx}>
+                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">
+                    Phone #{idx + 1} {idx === 0 ? '(Primary)' : ''}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={`e.g. +1 (800) 555-010${idx + 1}`}
+                    value={phoneList[idx]}
+                    onChange={(e) => handlePhoneChange(idx, e.target.value)}
+                    onBlur={() => handleSaveScammerInfo()}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5 flex items-center gap-1">
+                  <MessageCircle className="w-3 h-3 text-emerald-400" />
+                  WhatsApp
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. +1 800 555 9988"
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  onBlur={() => handleSaveScammerInfo()}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-300 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Carrier / VoIP</label>
+                <input
+                  type="text"
+                  placeholder="e.g. TextNow"
+                  value={carrier}
+                  onChange={(e) => setCarrier(e.target.value)}
+                  onBlur={() => handleSaveScammerInfo()}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Location</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Kolkata"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  onBlur={() => handleSaveScammerInfo()}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Case Profile & Dossier Details */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col flex-1 space-y-2 shadow">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Case Profile &amp; Details
+                </h3>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Pipeline Stage</label>
+                <select
+                  value={status}
+                  onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-semibold"
+                >
+                  <option value="New / Uncalled">1. New / Uncalled</option>
+                  <option value="Currently Baiting">2. Currently Baiting</option>
+                  <option value="Top Scams">3. Top Scams</option>
+                  <option value="Reported / Down">4. Reported / Down</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Target Deal / Fraud ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={targetValue}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) || 0;
+                    setTargetValue(val);
+                    handleSaveScammerInfo({ targetValue: val });
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-400 font-mono font-bold"
+                  placeholder="e.g. 4500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Scam Type</label>
+                <select
+                  value={scamType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setScamType(val);
+                    handleSaveScammerInfo({ scamType: val });
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-amber-300"
+                >
+                  <option value="Crypto Investment">Crypto Investment</option>
+                  <option value="IRS / Govt">IRS / Govt</option>
+                  <option value="Lotto / Sweepstakes">Lotto / Sweepstakes</option>
+                  <option value="Other">Other</option>
+                  <option value="Spellcaster / Pet">Spellcaster / Pet</option>
+                  <option value="Tech / Refund">Tech / Refund</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Fake Organization</label>
+                <input
+                  type="text"
+                  value={organization}
+                  onChange={(e) => setOrganization(e.target.value)}
+                  onBlur={() => handleSaveScammerInfo()}
+                  placeholder="e.g. Geek Squad"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Priority Rating</label>
+                <div className="flex items-center gap-1 h-6 px-2 bg-slate-950 border border-slate-800 rounded-lg">
+                  {[1, 2, 3].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => {
+                        setPriority(star);
+                        handleSaveScammerInfo({ priority: star });
+                      }}
+                      className="text-xs transition hover:scale-125"
+                    >
+                      <span className={star <= priority ? 'text-amber-400' : 'text-slate-700'}>★</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Scam Threat Level</label>
+                <select
+                  value={dangerLevel}
+                  onChange={(e) => {
+                    const val = e.target.value as any;
+                    setDangerLevel(val);
+                    handleSaveScammerInfo({ dangerLevel: val });
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                >
+                  <option value="low">Low Risk</option>
+                  <option value="medium">Medium Risk</option>
+                  <option value="high">High Threat</option>
+                  <option value="critical">Critical Threat</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Remote Access ID</label>
+                <input
+                  type="text"
+                  value={remoteAccessId}
+                  onChange={(e) => setRemoteAccessId(e.target.value)}
+                  onBlur={() => handleSaveScammerInfo()}
+                  placeholder="AnyDesk or UltraViewer"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Logged Scammer IP</label>
+                <input
+                  type="text"
+                  value={ipAddress}
+                  onChange={(e) => setIpAddress(e.target.value)}
+                  onBlur={() => handleSaveScammerInfo()}
+                  placeholder="Grabify or connection IP"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
+                />
+              </div>
+            </div>
+
+            {/* General Notes */}
+            <div className="flex-1 flex flex-col">
+              <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">
+                General Operations Notes
+              </label>
+              <textarea
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onBlur={() => handleSaveScammerInfo()}
+                placeholder="Behavioral traits, background noise, fake data fed during bait..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white flex-1 min-h-[45px] leading-relaxed"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* COLUMN 3 (Col Span 4): Receiver Assets & Evidence & Media */}
+        <div className="lg:col-span-4 flex flex-col gap-2.5">
+          {/* Receiver Assets / Reported Assets (Moved to Column 3 as per P4) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col shadow">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
               <div className="flex items-center gap-1.5">
                 <DollarSign className="w-3.5 h-3.5 text-rose-400" />
                 <h3 className="text-xs font-bold text-white uppercase tracking-wider">
@@ -531,14 +936,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             {showAddFraud && (
               <form
                 onSubmit={handleAddFraudAccount}
-                className="bg-slate-950 border border-rose-500/40 rounded-xl p-2.5 mb-2.5 space-y-2 text-xs"
+                className="bg-slate-950 border border-rose-500/40 rounded-xl p-2 mb-2 space-y-1.5 text-xs"
               >
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Asset Type</label>
+                  <label className="block text-[9px] font-medium text-slate-300 mb-0.5">Asset Type</label>
                   <select
                     value={fraudType}
                     onChange={(e) => setFraudType(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                    className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
                   >
                     <option value="bank_account">Bank Account</option>
                     <option value="crypto_wallet">Crypto Wallet</option>
@@ -551,36 +956,36 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Details (Account / Phone / URL)</label>
+                  <label className="block text-[9px] font-medium text-slate-300 mb-0.5">Details (Account / Phone / URL)</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. +1 (800) 555-0199 or Chase 12345678"
                     value={fraudDetails}
                     onChange={(e) => setFraudDetails(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
+                    className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white font-mono"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-1.5">
                   <div>
-                    <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Institution</label>
+                    <label className="block text-[9px] font-medium text-slate-300 mb-0.5">Institution</label>
                     <input
                       type="text"
                       placeholder="e.g. Chase Bank"
                       value={fraudInstitution}
                       onChange={(e) => setFraudInstitution(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Holder</label>
+                    <label className="block text-[9px] font-medium text-slate-300 mb-0.5">Holder</label>
                     <input
                       type="text"
                       placeholder="e.g. Money Mule"
                       value={fraudHolder}
                       onChange={(e) => setFraudHolder(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
                     />
                   </div>
                 </div>
@@ -595,7 +1000,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="px-3 py-1 text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition"
+                    className="px-3 py-1 text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded transition"
                   >
                     Save Asset
                   </button>
@@ -603,10 +1008,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               </form>
             )}
 
-            <div className="space-y-2 overflow-y-auto max-h-[300px] flex-1 pr-1">
+            <div className="space-y-1.5 overflow-y-auto max-h-[160px] flex-1 pr-1">
               {scammer.fraudAccounts.length === 0 ? (
-                <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800/80 text-slate-400 text-[11px] p-3">
-                  No receiver assets logged yet. Use &quot;Add Asset&quot; to track bank accounts, crypto wallets, websites, or reported phone numbers.
+                <div className="text-center py-4 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-[11px] p-2">
+                  No receiver assets logged yet. Click &quot;Add Asset&quot; to record bank accounts, wallets, or phone numbers.
                 </div>
               ) : (
                 scammer.fraudAccounts.map((acc) => (
@@ -651,461 +1056,202 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               )}
             </div>
           </div>
-        </div>
 
-        {/* COLUMN 2 (Col Span 5): Phone Numbers, WhatsApp & Case Dossier Profile */}
-        <div className="lg:col-span-5 flex flex-col gap-2.5">
-          {/* Phone Numbers & WhatsApp Intel */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2.5 shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+          {/* Evidence & Media Section (P5: Drag/drop, Click/search, Paste, 3MB limit, List view with rename & player) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col flex-1 shadow">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
               <div className="flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
                 <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Phone Numbers &amp; WhatsApp Intel
+                  Evidence &amp; Media ({evidenceMedia.length})
                 </h3>
               </div>
-              <span className="text-[10px] text-slate-400">Up to 4 phones + 1 WhatsApp</span>
+              <span className="text-[10px] text-slate-400">Max 3MB per file</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              {[0, 1, 2, 3].map((idx) => (
-                <div key={idx}>
-                  <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">
-                    Phone #{idx + 1} {idx === 0 ? '(Primary)' : ''}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={`e.g. +1 (800) 555-010${idx + 1}`}
-                    value={phoneList[idx]}
-                    onChange={(e) => handlePhoneChange(idx, e.target.value)}
-                    onBlur={() => handleSaveScammerInfo()}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5 flex items-center gap-1">
-                  <MessageCircle className="w-3 h-3 text-emerald-400" />
-                  WhatsApp Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. +1 (800) 555-9988"
-                  value={whatsappNumber}
-                  onChange={(e) => setWhatsappNumber(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-300 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Carrier / VoIP</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Bandwidth.com"
-                  value={carrier}
-                  onChange={(e) => setCarrier(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Location Gateway</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Kolkata Call Center"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Case Profile & Dossier Details */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col flex-1 space-y-2.5 shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-amber-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Case Profile &amp; Details
-                </h3>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Pipeline Stage</label>
-                <select
-                  value={status}
-                  onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-semibold"
-                >
-                  <option value="New / Uncalled">1. New / Uncalled</option>
-                  <option value="Currently Baiting">2. Currently Baiting</option>
-                  <option value="Top Scams">3. Top Scams</option>
-                  <option value="Reported / Down">4. Reported / Down</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Target Deal / Fraud ($)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={targetValue}
-                  onChange={(e) => {
-                    const val = Number(e.target.value) || 0;
-                    setTargetValue(val);
-                    handleSaveScammerInfo({ targetValue: val });
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-400 font-mono font-bold"
-                  placeholder="e.g. 24000"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Scam Type</label>
-                <select
-                  value={scamType}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setScamType(val);
-                    handleSaveScammerInfo({ scamType: val });
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-amber-300"
-                >
-                  <option value="Crypto Investment">Crypto Investment</option>
-                  <option value="IRS / Govt">IRS / Govt</option>
-                  <option value="Lotto / Sweepstakes">Lotto / Sweepstakes</option>
-                  <option value="Other">Other</option>
-                  <option value="Spellcaster / Pet">Spellcaster / Pet</option>
-                  <option value="Tech / Refund">Tech / Refund</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Fake Organization</label>
-                <input
-                  type="text"
-                  value={organization}
-                  onChange={(e) => setOrganization(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  placeholder="e.g. Geek Squad"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Priority Rating</label>
-                <div className="flex items-center gap-1.5 h-7 px-2 bg-slate-950 border border-slate-800 rounded-lg">
-                  {[1, 2, 3].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => {
-                        setPriority(star);
-                        handleSaveScammerInfo({ priority: star });
-                      }}
-                      className="text-xs transition hover:scale-125"
-                    >
-                      <span className={star <= priority ? 'text-amber-400' : 'text-slate-700'}>★</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Scam Threat Level</label>
-                <select
-                  value={dangerLevel}
-                  onChange={(e) => {
-                    const val = e.target.value as any;
-                    setDangerLevel(val);
-                    handleSaveScammerInfo({ dangerLevel: val });
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                >
-                  <option value="low">Low Risk</option>
-                  <option value="medium">Medium Risk</option>
-                  <option value="high">High Threat</option>
-                  <option value="critical">Critical Threat</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Remote Access ID</label>
-                <input
-                  type="text"
-                  value={remoteAccessId}
-                  onChange={(e) => setRemoteAccessId(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  placeholder="AnyDesk or UltraViewer"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">Logged Scammer IP</label>
-                <input
-                  type="text"
-                  value={ipAddress}
-                  onChange={(e) => setIpAddress(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  placeholder="Grabify or connection IP"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
-                />
-              </div>
-            </div>
-
-            {/* General Notes */}
-            <div className="flex-1 flex flex-col">
-              <label className="block text-[10px] font-semibold text-slate-400 mb-0.5">
-                General Operations Notes
-              </label>
-              <textarea
-                rows={2}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={() => handleSaveScammerInfo()}
-                placeholder="Behavioral traits, background noise heard, fake data fed during bait..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white flex-1 min-h-[50px] leading-relaxed"
+            {/* Drag, Drop & Paste Zone */}
+            <div
+              onDragOver={handleMediaDragOver}
+              onDragLeave={handleMediaDragLeave}
+              onDrop={handleMediaDrop}
+              onPaste={handleMediaPaste}
+              tabIndex={0}
+              className={`border-2 border-dashed rounded-xl p-2.5 text-center cursor-pointer transition focus:outline-none mb-2 ${
+                isDraggingMedia
+                  ? 'border-sky-500 bg-sky-500/10'
+                  : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+              }`}
+              onClick={() => {
+                const el = document.getElementById('evidence-media-input');
+                if (el) el.click();
+              }}
+            >
+              <input
+                type="file"
+                id="evidence-media-input"
+                accept="image/*,audio/*"
+                multiple
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files) {
+                    for (let i = 0; i < files.length; i++) {
+                      processMediaFile(files[i]);
+                    }
+                  }
+                }}
+                className="hidden"
               />
+              <div className="flex flex-col items-center justify-center gap-1 pointer-events-none">
+                <Upload className="w-4 h-4 text-sky-400" />
+                <p className="text-[11px] font-medium text-slate-200">
+                  Drag &amp; drop images/audio, click to browse, or paste (Ctrl+V)
+                </p>
+                <p className="text-[9px] text-slate-400">Images (.png, .jpg) &amp; Audio (.mp3, .wav) • Limit 3MB</p>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* COLUMN 3 (Col Span 4): Call Logs & Audio Recordings */}
-        <div className="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col shadow">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-rose-400" />
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                Call Logs &amp; Evidence ({scammer.calls.length})
-              </h3>
-            </div>
-            <button
-              type="button"
-              id="toggle-add-call-btn"
-              onClick={() => setShowAddCall(!showAddCall)}
-              className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold flex items-center gap-1 transition shadow"
-            >
-              <Plus className="w-3 h-3" />
-              {showAddCall ? 'Close' : 'Log Call'}
-            </button>
-          </div>
-
-          {showAddCall && (
-            <form
-              onSubmit={handleAddCallLog}
-              className="bg-slate-950 border border-rose-500/40 rounded-xl p-2.5 mb-2.5 space-y-2 text-xs"
-            >
-              <div className="grid grid-cols-3 gap-1.5">
-                <div>
-                  <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Duration (m)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    id="input-call-duration"
-                    value={callDuration}
-                    onChange={(e) => setCallDuration(parseInt(e.target.value) || 0)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Date</label>
-                  <input
-                    type="date"
-                    id="input-call-date"
-                    value={callDate}
-                    onChange={(e) => setCallDate(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Persona</label>
-                  <input
-                    type="text"
-                    id="input-call-persona"
-                    placeholder="Grandma Gertrude"
-                    value={callPersona}
-                    onChange={(e) => setCallPersona(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                  />
-                </div>
+            {mediaError && (
+              <div className="mb-2 p-1.5 rounded bg-rose-950/60 border border-rose-800 text-[10px] text-rose-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                <span>{mediaError}</span>
               </div>
-
-              <div>
-                <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Call Notes</label>
-                <textarea
-                  rows={2}
-                  id="input-call-notes"
-                  placeholder="What happened during this call?"
-                  value={callNotes}
-                  onChange={(e) => setCallNotes(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5">
-                <div>
-                  <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Info Fed</label>
-                  <input
-                    type="text"
-                    id="input-call-info-given"
-                    placeholder="Fake Target card code"
-                    value={callInfoGiven}
-                    onChange={(e) => setCallInfoGiven(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-medium text-slate-300 mb-0.5">Outcome</label>
-                  <input
-                    type="text"
-                    id="input-call-outcome"
-                    placeholder="Hung up furious"
-                    value={callOutcome}
-                    onChange={(e) => setCallOutcome(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                  />
-                </div>
-              </div>
-
-              {/* Audio Dropzone */}
-              <div className="space-y-1">
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onPaste={handlePaste}
-                  tabIndex={0}
-                  className={`border border-dashed rounded-lg p-2 text-center cursor-pointer transition focus:outline-none ${
-                    isDraggingOver
-                      ? 'border-rose-500 bg-rose-500/10'
-                      : audioFileName
-                      ? 'border-emerald-500/50 bg-emerald-950/20'
-                      : 'border-slate-800 bg-slate-900 hover:border-slate-700'
-                  }`}
-                  onClick={() => {
-                    const inputEl = document.getElementById('audio-file-input');
-                    if (inputEl) inputEl.click();
-                  }}
-                >
-                  <input
-                    type="file"
-                    id="audio-file-input"
-                    accept="audio/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) processAudioFile(file);
-                    }}
-                    className="hidden"
-                  />
-                  <div className="flex items-center justify-center gap-1.5 pointer-events-none">
-                    <Upload className={`w-3.5 h-3.5 ${audioFileName ? 'text-emerald-400' : 'text-slate-400'}`} />
-                    <span className="text-[11px] text-slate-300">
-                      {audioFileName ? audioFileName : 'Attach Audio (< 90s)'}
-                    </span>
-                  </div>
-                </div>
-                {audioError && (
-                  <p className="text-[10px] text-rose-400 font-medium flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3 shrink-0" />
-                    {audioError}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-1.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowAddCall(false)}
-                  className="px-2 py-1 text-[11px] text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  id="save-call-entry-btn"
-                  className="px-3 py-1 text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition"
-                >
-                  Save Call
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Calls List */}
-          <div className="space-y-2 overflow-y-auto flex-1 pr-1">
-            {scammer.calls.length === 0 ? (
-              <div className="text-center py-8 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-[11px] p-3">
-                No call logs recorded yet. Click &quot;Log Call&quot; above to log conversations and audio clips.
-              </div>
-            ) : (
-              scammer.calls.map((call) => (
-                <div
-                  key={call.id}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-1.5 hover:border-slate-700 transition"
-                >
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold font-mono text-[10px] border border-rose-500/30">
-                        {call.durationMinutes}m
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {new Date(call.date).toLocaleDateString([], {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-                      {call.victimPersonaUsed && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-800 truncate max-w-[100px]">
-                          {call.victimPersonaUsed}
-                        </span>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCall(call.id)}
-                      className="text-slate-500 hover:text-rose-400 p-0.5"
-                      title="Delete call"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-
-                  {call.notes && (
-                    <p className="text-[11px] text-slate-300 leading-snug">{call.notes}</p>
-                  )}
-
-                  {call.infoGiven && (
-                    <div className="text-[10px] bg-slate-900 rounded p-1.5 border border-slate-800 text-slate-400">
-                      <span className="text-rose-400 font-semibold">Fed:</span> {call.infoGiven}
-                    </div>
-                  )}
-
-                  {call.audioRecordingUrl && (
-                    <AudioPlayerWidget
-                      audioUrl={call.audioRecordingUrl}
-                      audioName={call.audioRecordingName}
-                    />
-                  )}
-                </div>
-              ))
             )}
+
+            {/* Evidence & Media List */}
+            <div className="space-y-1.5 overflow-y-auto max-h-[220px] flex-1 pr-1">
+              {evidenceMedia.length === 0 ? (
+                <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-[11px] p-2">
+                  No evidence or media files uploaded yet. Drag &amp; drop or paste files above.
+                </div>
+              ) : (
+                evidenceMedia.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1.5 hover:border-slate-700 transition"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {item.type === 'image' ? (
+                          <ImageIcon className="w-4 h-4 text-sky-400 shrink-0" />
+                        ) : (
+                          <FileAudio className="w-4 h-4 text-rose-400 shrink-0" />
+                        )}
+
+                        {editingMediaId === item.id ? (
+                          <div className="flex items-center gap-1 flex-1">
+                            <input
+                              type="text"
+                              value={editingMediaName}
+                              onChange={(e) => setEditingMediaName(e.target.value)}
+                              className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-white w-full"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveMediaName(item.id)}
+                              className="p-1 rounded bg-emerald-600 text-white text-[10px]"
+                            >
+                              <Check className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span
+                            className="text-xs font-semibold text-slate-100 truncate cursor-pointer hover:text-sky-300"
+                            onClick={() => {
+                              if (item.type === 'image') setPreviewImage(item.url);
+                            }}
+                          >
+                            {item.name}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[9px] text-slate-400 font-mono">
+                          {(item.sizeBytes / 1024).toFixed(0)}KB
+                        </span>
+
+                        {item.type === 'image' && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage(item.url)}
+                            className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
+                            title="View full image"
+                          >
+                            <Eye className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingMediaId(item.id);
+                            setEditingMediaName(item.name);
+                          }}
+                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-amber-300"
+                          title="Rename asset"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMedia(item.id)}
+                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
+                          title="Delete asset"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Media Inline Preview or Audio Player */}
+                    {item.type === 'image' ? (
+                      <div
+                        className="w-full h-16 bg-slate-900 rounded overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-sky-500/50 transition"
+                        onClick={() => setPreviewImage(item.url)}
+                      >
+                        <img
+                          src={item.url}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="bg-slate-900 rounded p-1.5 border border-slate-800">
+                        <audio controls src={item.url} className="w-full h-8" />
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Image Full Size Modal Preview */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-800 rounded-xl overflow-hidden p-2">
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-white hover:bg-rose-600 transition z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={previewImage}
+              alt="Evidence preview"
+              className="max-h-[85vh] w-auto object-contain rounded-lg"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
