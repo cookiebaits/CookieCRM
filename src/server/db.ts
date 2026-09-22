@@ -207,56 +207,64 @@ if (directConnString) {
     directConnString.includes('@localhost') ||
     directConnString.includes('@127.0.0.1');
 
-  function initPgPool(useSsl: boolean) {
-    try {
-      const pool = new pg.Pool({
-        connectionString: directConnString!,
-        ssl: useSsl ? { rejectUnauthorized: false } : false,
-        connectionTimeoutMillis: 10000,
-        idleTimeoutMillis: 30000,
-        max: 15,
-        keepAlive: true,
-        keepAliveInitialDelayMillis: 10000,
-      });
+  function getFallbackConnStrings(primaryUrl: string): string[] {
+    const urls = [primaryUrl];
+    // Check if URL matches db.<project-ref>.supabase.co:5432 format
+    const match = primaryUrl.match(/postgres(?:ql)?:\/\/(?:([^:]+):([^@]+)@)?db\.([a-z0-9]+)\.supabase\.co/i);
+    if (match) {
+      const pass = match[2] || '';
+      const projRef = match[3];
+      if (projRef) {
+        // Add Supabase IPv4 Pooler candidate URLs
+        urls.push(`postgresql://postgres.${projRef}:${pass}@aws-0-us-west-2.pooler.supabase.com:6543/postgres`);
+        urls.push(`postgresql://postgres.${projRef}:${pass}@aws-0-us-west-2.pooler.supabase.com:5432/postgres`);
+      }
+    }
+    return urls;
+  }
 
-      pool.on('error', (err) => {
-        console.warn('[DB-SUPABASE] Background pool notice (auto-recovered):', err.message);
-      });
+  async function tryConnectPools(candidateUrls: string[], useSsl: boolean) {
+    for (const url of candidateUrls) {
+      try {
+        const testPool = new pg.Pool({
+          connectionString: url,
+          ssl: useSsl ? { rejectUnauthorized: false } : false,
+          connectionTimeoutMillis: 8000,
+          idleTimeoutMillis: 30000,
+          max: 15,
+          keepAlive: true,
+          keepAliveInitialDelayMillis: 10000,
+        });
 
-      pool.connect((err, client, release) => {
-        if (err) {
-          const errMsg = err.message || '';
-          if (useSsl && (errMsg.includes('does not support SSL') || errMsg.includes('SSL') || errMsg.includes('no pg_hba.conf entry'))) {
-            console.log('[DB-SUPABASE] Server does not require SSL. Reconnecting to PostgreSQL without SSL...');
-            pool.end().catch(() => {});
-            initPgPool(false);
-            return;
-          }
+        testPool.on('error', (err) => {
+          console.warn('[DB-SUPABASE] Background pool notice (auto-recovered):', err.message);
+        });
 
-          if (errMsg.includes('ENETUNREACH') || errMsg.includes('ETIMEDOUT')) {
-            console.warn(`[DB-SUPABASE] Connection notice (${errMsg}): If your network environment does not route IPv6 to db.fanivhbjwfaiezpsawpa.supabase.co:5432, use your Supabase Transaction Pooler URL (aws-0-[region].pooler.supabase.com:6543) which has native IPv4 support.`);
-          } else {
-            console.warn(`[DB-SUPABASE] Notice: Could not connect to direct PostgreSQL connection (${errMsg}). Operating in resilient storage mode.`);
-          }
+        const client = await testPool.connect();
+        client.release();
 
-          if (dbReadyResolver) dbReadyResolver(false);
-        } else {
-          release();
-          pgPool = pool;
-          isPostgresReady = true;
-          console.log(`[DB-SUPABASE] Connected successfully to Supabase PostgreSQL database (${useSsl ? 'SSL enabled' : 'Internal / SSL disabled'})!`);
-          initSupabaseDirectSchema().then(() => {
-            if (dbReadyResolver) dbReadyResolver(true);
-          });
-        }
-      });
-    } catch (err) {
-      console.warn('[DB-SUPABASE] Pool initialization warning:', err);
+        pgPool = testPool;
+        isPostgresReady = true;
+        console.log(`[DB-SUPABASE] Connected successfully to Supabase PostgreSQL database! (${maskDbUrl(url)})`);
+        await initSupabaseDirectSchema();
+        if (dbReadyResolver) dbReadyResolver(true);
+        return;
+      } catch (err: any) {
+        // try next candidate
+      }
+    }
+
+    if (useSsl) {
+      console.log('[DB-SUPABASE] Retrying connection without SSL enforcement...');
+      await tryConnectPools(candidateUrls, false);
+    } else {
+      console.warn('[DB-SUPABASE] Notice: Operating in resilient storage mode.');
       if (dbReadyResolver) dbReadyResolver(false);
     }
   }
 
-  initPgPool(!isDisableSsl);
+  const connCandidates = getFallbackConnStrings(directConnString);
+  tryConnectPools(connCandidates, !isDisableSsl);
 } else {
   console.log('[DB] No direct PostgreSQL connection string detected. Set DATABASE_URL with your Supabase direct postgres link.');
   if (dbReadyResolver) dbReadyResolver(false);
