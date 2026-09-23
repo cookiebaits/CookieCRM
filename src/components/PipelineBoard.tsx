@@ -118,6 +118,36 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
+  // Quick Inline Time Edit state on the dashboard (no save button needed: click, edit, click out/blur to save)
+  const [editingTimeScammerId, setEditingTimeScammerId] = useState<string | null>(null);
+  const [editingTimeHours, setEditingTimeHours] = useState<string>('0');
+  const [editingTimeMinutes, setEditingTimeMinutes] = useState<string>('0');
+
+  // Start editing time for a scammer
+  const handleStartTimeEdit = (e: React.MouseEvent, scammer: Scammer) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const totalMins = scammer.totalTimeSpent || 0;
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    setEditingTimeScammerId(scammer.id);
+    setEditingTimeHours(String(h));
+    setEditingTimeMinutes(String(m));
+  };
+
+  // Commit editing time on blur or enter (click out to save)
+  const handleCommitTimeEdit = (scammerId: string) => {
+    if (editingTimeScammerId !== scammerId) return;
+    const h = Math.max(0, parseInt(editingTimeHours, 10) || 0);
+    const m = Math.max(0, Math.min(59, parseInt(editingTimeMinutes, 10) || 0));
+    const totalMinutes = h * 60 + m;
+
+    if (onUpdateScammer) {
+      onUpdateScammer(scammerId, { totalTimeSpent: totalMinutes });
+    }
+    setEditingTimeScammerId(null);
+  };
+
   // Odoo Column Folding state (e.g. folding/collapsing a column into a slim vertical strip)
   const [foldedColumns, setFoldedColumns] = useState<Record<CanonicalStatus, boolean>>({
     'New / Uncalled': false,
@@ -296,11 +326,15 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
     }
   };
 
-  // Star priority click handler
+  // Star priority click handler (Quick edit: click star 3 to become 3, clicking same star can reset to 0/1 or set to clicked rating)
   const handleTogglePriority = (e: React.MouseEvent, scammer: Scammer, newPriority: number) => {
     e.stopPropagation();
+    e.preventDefault();
+    const currentPriority = scammer.priority || 0;
+    // If user clicks the currently active star rating, allow toggle off to 0, otherwise set to newPriority
+    const targetRating = currentPriority === newPriority ? Math.max(0, newPriority - 1) : newPriority;
     if (onUpdateScammer) {
-      onUpdateScammer(scammer.id, { priority: newPriority });
+      onUpdateScammer(scammer.id, { priority: targetRating });
     }
   };
 
@@ -367,7 +401,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
             <button
               type="button"
               id="odoo-new-opportunity-btn"
-              onClick={() => onQuickAdd('New')}
+              onClick={() => onQuickAdd('New / Uncalled')}
               className="px-4 py-2 rounded-lg bg-[#714B67] hover:bg-[#5f3d56] text-white font-extrabold text-sm flex items-center gap-1.5 shadow-md shadow-purple-950/30 transition hover:scale-[1.02] active:scale-[0.98] tracking-wide shrink-0"
             >
               <Plus className="w-4 h-4" />
@@ -882,15 +916,58 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                 )}
                               </div>
 
-                              {/* Time Wasted Display (Replaces Cost/Dollars) */}
-                              <div className="text-right shrink-0">
-                                <span
-                                  className="font-mono text-xs font-extrabold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/40 flex items-center gap-1"
-                                  title="Total time wasted on this scammer"
-                                >
-                                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                                  {formatDuration(scammer.totalTimeSpent || 0)}
-                                </span>
+                              {/* Time Wasted Display & Quick Edit (Click, edit, click out to save) */}
+                              <div className="text-right shrink-0" onClick={(e) => e.stopPropagation()}>
+                                {editingTimeScammerId === scammer.id ? (
+                                  <div
+                                    className="flex items-center gap-1 bg-slate-900 border-2 border-amber-500 rounded px-1.5 py-0.5 shadow-lg animate-fadeIn"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                                    <div className="flex items-center gap-0.5 text-xs font-mono font-bold text-white">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={editingTimeHours}
+                                        onChange={(e) => setEditingTimeHours(e.target.value)}
+                                        onBlur={() => handleCommitTimeEdit(scammer.id)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleCommitTimeEdit(scammer.id);
+                                          if (e.key === 'Escape') setEditingTimeScammerId(null);
+                                        }}
+                                        autoFocus
+                                        className="w-7 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                                        title="Hours"
+                                      />
+                                      <span className="text-[10px] text-slate-400">h</span>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="59"
+                                        value={editingTimeMinutes}
+                                        onChange={(e) => setEditingTimeMinutes(e.target.value)}
+                                        onBlur={() => handleCommitTimeEdit(scammer.id)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleCommitTimeEdit(scammer.id);
+                                          if (e.key === 'Escape') setEditingTimeScammerId(null);
+                                        }}
+                                        className="w-7 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                                        title="Minutes"
+                                      />
+                                      <span className="text-[10px] text-slate-400">m</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleStartTimeEdit(e, scammer)}
+                                    className="font-mono text-xs font-extrabold text-amber-300 bg-amber-950/60 hover:bg-amber-900/60 hover:border-amber-400 px-2 py-0.5 rounded border border-amber-500/40 flex items-center gap-1 transition cursor-pointer group/time"
+                                    title="Total time wasted on this scammer. Click to quick edit time."
+                                  >
+                                    <Clock className="w-3.5 h-3.5 text-amber-400 group-hover/time:scale-110 transition" />
+                                    <span>{formatDuration(scammer.totalTimeSpent || 0)}</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
 
@@ -1079,37 +1156,96 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           </span>
                         </td>
 
-                        {/* Time Wasted Column */}
-                        <td className="px-4 py-3 font-mono font-bold text-amber-300">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-amber-400" />
-                            {formatDuration(scammer.totalTimeSpent || 0)}
-                          </span>
+                        {/* Time Wasted Column with Quick Edit */}
+                        <td className="px-4 py-3 font-mono font-bold text-amber-300" onClick={(e) => e.stopPropagation()}>
+                          {editingTimeScammerId === scammer.id ? (
+                            <div
+                              className="flex items-center gap-1 bg-slate-900 border border-amber-500 rounded px-1.5 py-0.5"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                              <div className="flex items-center gap-0.5 text-xs font-mono font-bold text-white">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={editingTimeHours}
+                                  onChange={(e) => setEditingTimeHours(e.target.value)}
+                                  onBlur={() => handleCommitTimeEdit(scammer.id)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleCommitTimeEdit(scammer.id);
+                                    if (e.key === 'Escape') setEditingTimeScammerId(null);
+                                  }}
+                                  autoFocus
+                                  className="w-7 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                                  title="Hours"
+                                />
+                                <span className="text-[10px] text-slate-400">h</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="59"
+                                  value={editingTimeMinutes}
+                                  onChange={(e) => setEditingTimeMinutes(e.target.value)}
+                                  onBlur={() => handleCommitTimeEdit(scammer.id)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleCommitTimeEdit(scammer.id);
+                                    if (e.key === 'Escape') setEditingTimeScammerId(null);
+                                  }}
+                                  className="w-7 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                                  title="Minutes"
+                                />
+                                <span className="text-[10px] text-slate-400">m</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => handleStartTimeEdit(e, scammer)}
+                              className="flex items-center gap-1 hover:text-amber-200 hover:bg-amber-950/40 px-1.5 py-0.5 rounded transition cursor-pointer"
+                              title="Click to quick edit time wasted"
+                            >
+                              <Clock className="w-3 h-3 text-amber-400" />
+                              <span>{formatDuration(scammer.totalTimeSpent || 0)}</span>
+                            </button>
+                          )}
                         </td>
 
                         <td className="px-4 py-3">
                           <div
-                            className="flex items-center gap-0.5 cursor-pointer"
+                            className="flex items-center gap-1.5 cursor-pointer"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {[1, 2, 3].map((star) => (
-                              <button
-                                key={star}
-                                type="button"
-                                onClick={(e) => handleTogglePriority(e, scammer, star)}
-                                className="text-xs hover:scale-125 transition"
-                              >
-                                <span
-                                  className={
-                                    star <= priorityRating
-                                      ? 'text-amber-400 font-bold'
-                                      : 'text-slate-700'
-                                  }
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={(e) => handleTogglePriority(e, scammer, star)}
+                                  className="text-xs hover:scale-125 transition px-0.5"
+                                  title={`Set priority to ${star} stars`}
                                 >
-                                  ★
-                                </span>
-                              </button>
-                            ))}
+                                  <span
+                                    className={
+                                      star <= priorityRating
+                                        ? 'text-amber-400 font-bold'
+                                        : 'text-slate-700'
+                                    }
+                                  >
+                                    ★
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => handleToggleFlagged(e, scammer)}
+                              title={scammer.flagged ? "Flagged (Click to unflag)" : "Click to quick flag"}
+                              className={`p-1 rounded transition ${
+                                scammer.flagged ? 'text-rose-400 bg-rose-500/20' : 'text-slate-600 hover:text-slate-300'
+                              }`}
+                            >
+                              <Flag className={`w-3 h-3 ${scammer.flagged ? 'fill-rose-400' : ''}`} />
+                            </button>
                           </div>
                         </td>
 
