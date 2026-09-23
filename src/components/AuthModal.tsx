@@ -15,6 +15,224 @@ interface AuthModalProps {
   onSuccess: (user: User) => void;
 }
 
+// Continuous Script Line Definition
+interface TerminalLog {
+  id: number;
+  text: string;
+  prefix?: string;
+  color?: string;
+}
+
+// Endless stream of authentic scambaiter daemon routines
+const SCRIPT_ROUTINES: Omit<TerminalLog, 'id'>[] = [
+  { prefix: '>', text: 'scambaiter --daemon --cluster-connect', color: 'text-amber-300' },
+  { prefix: '✔', text: 'Database cluster: PostgreSQL [OK]', color: 'text-emerald-400' },
+  { prefix: '✔', text: 'VoIP honeypot & audio wiretap: ONLINE', color: 'text-emerald-400' },
+  { prefix: '✔', text: 'Fraud ring dossiers synchronized', color: 'text-cyan-400' },
+  { prefix: '⚡', text: 'Bait bot socket listening on port 5060/UDP', color: 'text-slate-300' },
+  { prefix: '▶', text: 'STANDBY: Ready for agent credentials', color: 'text-rose-400' },
+  { prefix: '>', text: 'sys.monitor --watch-telephony-queues', color: 'text-amber-300' },
+  { prefix: '✔', text: 'SIP trunk handshake verified with carrier', color: 'text-emerald-400' },
+  { prefix: '✔', text: 'Honeypot virtual machines standing by', color: 'text-teal-400' },
+  { prefix: '⚡', text: 'Live packet analyzer stream active', color: 'text-cyan-300' },
+  { prefix: '✔', text: 'Scam phone number blacklists synced', color: 'text-emerald-400' },
+  { prefix: '▶', text: 'AUTH_GATE: Awaiting operator authentication', color: 'text-amber-400' },
+  { prefix: '>', text: 'scambaiter --heartbeat --keepalive', color: 'text-amber-300' },
+  { prefix: '✔', text: 'Zero latency detected across database shards', color: 'text-emerald-400' },
+];
+
+// Eye-catching persistent animated terminal that continuously types commands char-by-char without clearing
+const TerminalCommandLoader: React.FC<{ dbSource: string }> = ({ dbSource }) => {
+  const [completedLines, setCompletedLines] = useState<TerminalLog[]>([
+    { id: 1, prefix: '>', text: 'scambaiter --daemon --cluster-connect', color: 'text-amber-300' },
+    { id: 2, prefix: '✔', text: `Database cluster: ${dbSource.replace(/ \(.*/, '')} [OK]`, color: 'text-emerald-400' },
+  ]);
+
+  // Current active line being typed out character-by-character
+  const [activeLine, setActiveLine] = useState<{
+    prefix: string;
+    text: string;
+    color: string;
+  } | null>(null);
+  const [typedChars, setTypedChars] = useState<string>('');
+
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const nextRoutineIdxRef = React.useRef(2);
+  const idCounterRef = React.useRef(3);
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    let isCancelled = false;
+
+    const startTypingNextCommand = () => {
+      if (isCancelled) return;
+
+      const routine = SCRIPT_ROUTINES[nextRoutineIdxRef.current % SCRIPT_ROUTINES.length];
+      nextRoutineIdxRef.current += 1;
+
+      // Set the active line to start typing
+      setActiveLine({
+        prefix: routine.prefix || '>',
+        text: routine.text,
+        color: routine.color || 'text-slate-300',
+      });
+      setTypedChars('');
+
+      let charIndex = 0;
+      const fullText = routine.text;
+
+      const typeNextChar = () => {
+        if (isCancelled) return;
+
+        if (charIndex < fullText.length) {
+          charIndex++;
+          setTypedChars(fullText.slice(0, charIndex));
+
+          // Human-like slight jitter in typing speed (faster for routine checks, slight pauses for dashes)
+          const char = fullText[charIndex - 1];
+          let delay = 24 + Math.random() * 26;
+          if (char === ' ' || char === '-' || char === ':') {
+            delay += 35;
+          }
+
+          timeoutId = setTimeout(typeNextChar, delay);
+        } else {
+          // Finished typing this line! Brief pause before committing to completedLines
+          timeoutId = setTimeout(() => {
+            if (isCancelled) return;
+
+            const newId = idCounterRef.current++;
+            setCompletedLines((prev) => {
+              const updated = [
+                ...prev,
+                {
+                  id: newId,
+                  prefix: routine.prefix,
+                  text: routine.text,
+                  color: routine.color,
+                },
+              ];
+              // Keep an endless persistent scroll buffer of up to 40 lines
+              if (updated.length > 40) {
+                return updated.slice(updated.length - 35);
+              }
+              return updated;
+            });
+
+            // Clear active line
+            setActiveLine(null);
+            setTypedChars('');
+
+            // Small pause between commands before human/daemon types the next one
+            timeoutId = setTimeout(startTypingNextCommand, 450 + Math.random() * 300);
+          }, 320);
+        }
+      };
+
+      // Slight pre-typing hesitation
+      timeoutId = setTimeout(typeNextChar, 180);
+    };
+
+    // Kick off first typing sequence
+    timeoutId = setTimeout(startTypingNextCommand, 600);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [dbSource]);
+
+  // Keep auto-scrolling to bottom smoothly as characters & lines stream in
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [completedLines, typedChars, activeLine]);
+
+  return (
+    <div className="mb-6 rounded-xl overflow-hidden border border-emerald-500/30 bg-slate-950 shadow-lg shadow-emerald-950/20 font-mono text-[11px] select-none">
+      {/* Terminal Title Bar */}
+      <div className="bg-slate-900/90 px-3 py-1.5 border-b border-slate-800 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block shadow-sm shadow-rose-500/50"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block shadow-sm shadow-amber-500/50"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block shadow-sm shadow-emerald-500/50"></span>
+          <span className="ml-2 text-[10px] text-slate-400 font-semibold tracking-wider">
+            terminal ~ scambait-crm v4.2
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>SYS_ONLINE</span>
+        </div>
+      </div>
+
+      {/* Terminal Screen Body with persistent scrolling stream */}
+      <div
+        ref={scrollRef}
+        className="p-3 bg-slate-950/95 space-y-1.5 h-[125px] overflow-y-auto flex flex-col justify-start relative scroll-smooth scrollbar-none"
+      >
+        {/* Subtle glowing scanline effect */}
+        <div className="pointer-events-none sticky top-0 inset-x-0 h-full bg-gradient-to-b from-transparent via-emerald-500/[0.02] to-transparent bg-[length:100%_4px] opacity-40"></div>
+
+        {completedLines.map((l) => (
+          <div key={l.id} className="flex items-start gap-1.5 animate-fadeIn shrink-0">
+            {l.prefix && (
+              <span
+                className={`font-bold ${
+                  l.prefix === '✔'
+                    ? 'text-emerald-400'
+                    : l.prefix === '>'
+                    ? 'text-amber-400'
+                    : l.prefix === '⚡'
+                    ? 'text-cyan-400'
+                    : 'text-rose-400'
+                }`}
+              >
+                {l.prefix}
+              </span>
+            )}
+            <span className={`${l.color || 'text-slate-300'} tracking-tight leading-none`}>
+              {l.text}
+            </span>
+          </div>
+        ))}
+
+        {/* Currently typing line simulation */}
+        {activeLine && (
+          <div className="flex items-start gap-1.5 shrink-0">
+            <span
+              className={`font-bold ${
+                activeLine.prefix === '✔'
+                  ? 'text-emerald-400'
+                  : activeLine.prefix === '>'
+                  ? 'text-amber-400'
+                  : activeLine.prefix === '⚡'
+                  ? 'text-cyan-400'
+                  : 'text-rose-400'
+              }`}
+            >
+              {activeLine.prefix}
+            </span>
+            <span className={`${activeLine.color || 'text-slate-200'} tracking-tight leading-none`}>
+              {typedChars}
+            </span>
+            <span className="w-1.5 h-3 bg-emerald-400 inline-block animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>
+          </div>
+        )}
+
+        {/* Flashing terminal cursor when idle between lines */}
+        {!activeLine && (
+          <div className="flex items-center gap-1 text-emerald-400 pt-0.5 shrink-0">
+            <span className="text-slate-500 text-[10px]">&gt;</span>
+            <span className="w-2 h-3.5 bg-emerald-400 inline-block animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -337,20 +555,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
               </div>
             )}
 
-            {/* Database Connection Status */}
-            <div className="flex items-center justify-between text-[11px] text-slate-400 bg-slate-950/80 border border-slate-800/80 rounded-lg px-3.5 py-2 mb-6">
-              <span className="flex items-center gap-1.5 font-medium">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    dbSource.includes('Active')
-                      ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
-                      : 'bg-amber-400'
-                  }`}
-                ></span>
-                <span>Database:</span>
-              </span>
-              <span className="font-mono text-slate-300 text-[10px] tracking-tight">{dbSource}</span>
-            </div>
+            {/* Animated Terminal System Loader */}
+            <TerminalCommandLoader dbSource={dbSource} />
 
             {/* Google Sign In Button */}
             <div className="space-y-4">

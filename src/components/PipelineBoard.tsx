@@ -326,13 +326,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
     }
   };
 
-  // Star priority click handler (Quick edit: click star 3 to become 3, clicking same star can reset to 0/1 or set to clicked rating)
+  // Star priority click handler (Quick edit: click star 3 to become 3 star rating, clicking star 1 to become 1 star, clicking same star can toggle off)
   const handleTogglePriority = (e: React.MouseEvent, scammer: Scammer, newPriority: number) => {
     e.stopPropagation();
     e.preventDefault();
     const currentPriority = scammer.priority || 0;
-    // If user clicks the currently active star rating, allow toggle off to 0, otherwise set to newPriority
-    const targetRating = currentPriority === newPriority ? Math.max(0, newPriority - 1) : newPriority;
+    // If user clicks the exact star rating it already has, toggle off to 0, otherwise set directly to clicked star (e.g. if 2 and clicks 3 -> 3)
+    const targetRating = currentPriority === newPriority ? 0 : newPriority;
     if (onUpdateScammer) {
       onUpdateScammer(scammer.id, { priority: targetRating });
     }

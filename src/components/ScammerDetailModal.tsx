@@ -91,6 +91,27 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   const [whatsappNumber, setWhatsappNumber] = useState(scammer.whatsappNumber || '');
 
+  // Quick edit total time state (click, edit, click out to save)
+  const [isEditingTotalTime, setIsEditingTotalTime] = useState(false);
+  const [editHoursVal, setEditHoursVal] = useState<string>('0');
+  const [editMinsVal, setEditMinsVal] = useState<string>('0');
+
+  const handleStartEditingTime = () => {
+    const total = scammer.totalTimeSpent || 0;
+    setEditHoursVal(String(Math.floor(total / 60)));
+    setEditMinsVal(String(total % 60));
+    setIsEditingTotalTime(true);
+  };
+
+  const handleCommitEditingTime = () => {
+    if (!isEditingTotalTime) return;
+    const h = Math.max(0, parseInt(editHoursVal, 10) || 0);
+    const m = Math.max(0, Math.min(59, parseInt(editMinsVal, 10) || 0));
+    const newTotalMinutes = h * 60 + m;
+    setIsEditingTotalTime(false);
+    handleSaveScammerInfo({ totalTimeSpent: newTotalMinutes });
+  };
+
   // Quick Call Logger State (HH:MM:SS & Date Picker)
   const [loggerHours, setLoggerHours] = useState<number>(0);
   const [loggerMins, setLoggerMins] = useState<number>(0);
@@ -431,15 +452,43 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           <div className="h-5 w-px bg-slate-800 hidden sm:block"></div>
 
           <div className="flex items-center gap-2">
-            <div
-              className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+            {/* Quick Flag Button */}
+            <button
+              type="button"
+              onClick={handleToggleFlag}
+              title={flagged ? "Flagged target (Click to unflag)" : "Click to quick flag target"}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer border ${
                 flagged
-                  ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30'
-                  : 'bg-slate-800 text-slate-300'
+                  ? 'bg-rose-600/20 text-rose-400 border-rose-500/40 hover:bg-rose-600/30'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:border-slate-600'
               }`}
             >
               <Flag className={`w-4 h-4 ${flagged ? 'text-rose-400 fill-rose-400' : ''}`} />
+            </button>
+
+            {/* Quick Star Priority Rating */}
+            <div
+              className="flex items-center gap-0.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-700"
+              title={`Priority Rating: ${priority} of 3. Click to adjust.`}
+            >
+              {[1, 2, 3].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => {
+                    const newPriority = priority === star ? 0 : star;
+                    setPriority(newPriority);
+                    handleSaveScammerInfo({ priority: newPriority });
+                  }}
+                  className="text-sm px-0.5 hover:scale-125 transition cursor-pointer"
+                >
+                  <span className={star <= priority ? 'text-amber-400 font-bold' : 'text-slate-700'}>
+                    ★
+                  </span>
+                </button>
+              ))}
             </div>
+
             <input
               type="text"
               value={fullName}
@@ -479,12 +528,54 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800 font-mono">
-            <Clock className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-emerald-400 font-bold">{todayMinutes}m Today</span>
-            <span className="text-slate-600">|</span>
-            <span>{totalMinutes}m Total</span>
-          </div>
+          {/* Total & Today Time display with Quick Edit (Click, edit, click out to save) */}
+          {isEditingTotalTime ? (
+            <div className="flex items-center gap-1 bg-slate-900 border-2 border-amber-500 rounded-lg px-2 py-1 shadow-lg animate-fadeIn text-xs font-mono font-bold text-white">
+              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <input
+                type="number"
+                min="0"
+                value={editHoursVal}
+                onChange={(e) => setEditHoursVal(e.target.value)}
+                onBlur={handleCommitEditingTime}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCommitEditingTime();
+                  if (e.key === 'Escape') setIsEditingTotalTime(false);
+                }}
+                autoFocus
+                className="w-8 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                title="Hours"
+              />
+              <span className="text-[10px] text-slate-400">h</span>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={editMinsVal}
+                onChange={(e) => setEditMinsVal(e.target.value)}
+                onBlur={handleCommitEditingTime}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCommitEditingTime();
+                  if (e.key === 'Escape') setIsEditingTotalTime(false);
+                }}
+                className="w-8 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                title="Minutes"
+              />
+              <span className="text-[10px] text-slate-400">m</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleStartEditingTime}
+              className="flex items-center gap-2 text-xs text-slate-300 bg-slate-950/90 hover:bg-slate-900 hover:border-amber-500/50 px-2.5 py-1 rounded-lg border border-slate-800 font-mono transition cursor-pointer group/time"
+              title="Click to quick edit total time wasted"
+            >
+              <Clock className="w-3.5 h-3.5 text-emerald-400 group-hover/time:text-amber-400 transition" />
+              <span className="text-emerald-400 font-bold">{todayMinutes}m Today</span>
+              <span className="text-slate-600">|</span>
+              <span className="text-amber-300 font-bold underline decoration-dotted">{totalMinutes}m Total</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -626,8 +717,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               <p className="text-[10px] text-slate-300 font-extrabold uppercase">Today</p>
               <p className="text-sm font-black text-emerald-400 mt-0.5">{formatDurationDisplay(todayMinutes)}</p>
             </div>
-            <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
-              <p className="text-[10px] text-slate-300 font-extrabold uppercase">Wasted</p>
+            <div
+              onClick={handleStartEditingTime}
+              className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-amber-500/50 cursor-pointer transition group"
+              title="Click to quick edit time wasted"
+            >
+              <p className="text-[10px] text-slate-300 font-extrabold uppercase group-hover:text-amber-400 transition">Wasted</p>
               <p className="text-sm font-black text-amber-300 mt-0.5">{formatDurationDisplay(totalMinutes)}</p>
             </div>
             <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
@@ -864,10 +959,11 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       key={star}
                       type="button"
                       onClick={() => {
-                        setPriority(star);
-                        handleSaveScammerInfo({ priority: star });
+                        const newPriority = priority === star ? 0 : star;
+                        setPriority(newPriority);
+                        handleSaveScammerInfo({ priority: newPriority });
                       }}
-                      className="text-xs transition hover:scale-125"
+                      className="text-xs transition hover:scale-125 cursor-pointer"
                     >
                       <span className={star <= priority ? 'text-amber-400' : 'text-slate-700'}>★</span>
                     </button>
