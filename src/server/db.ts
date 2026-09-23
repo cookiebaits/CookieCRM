@@ -89,6 +89,7 @@ interface DatabaseState {
 // Storage Directory & File Setup (Local Resilient Store)
 // -----------------------------------------------------------
 const dataDir = process.env.DATA_DIR || (fs.existsSync('/app') ? '/app/data' : path.resolve(process.cwd(), 'data'));
+
 if (!fs.existsSync(dataDir)) {
   try {
     fs.mkdirSync(dataDir, { recursive: true, mode: 0o777 });
@@ -96,6 +97,7 @@ if (!fs.existsSync(dataDir)) {
     console.warn('[DB] Failed to create data directory:', err);
   }
 }
+
 const dataFile = path.join(dataDir, 'scambaiter_db.json');
 
 const state: DatabaseState = {
@@ -110,22 +112,26 @@ function loadFromDisk() {
     if (fs.existsSync(dataFile)) {
       const raw = fs.readFileSync(dataFile, 'utf8');
       const parsed = JSON.parse(raw);
+
       state.users = (parsed.users || []).map((u: any) => ({
         ...u,
         createdAt: new Date(u.createdAt),
         updatedAt: new Date(u.updatedAt),
       }));
+
       state.scammers = (parsed.scammers || []).map((s: any) => ({
         ...s,
         createdAt: new Date(s.createdAt),
         updatedAt: new Date(s.updatedAt),
       }));
+
       state.callLogs = (parsed.callLogs || []).map((c: any) => ({
         ...c,
         date: new Date(c.date),
         createdAt: new Date(c.createdAt),
         updatedAt: new Date(c.updatedAt),
       }));
+
       state.fraudAccounts = (parsed.fraudAccounts || []).map((f: any) => ({
         ...f,
         createdAt: new Date(f.createdAt),
@@ -141,6 +147,24 @@ function persistToDisk() {
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
     try {
+      // Guard against writing an empty state over a non-empty disk backup during boot
+      if (
+        state.users.length === 0 &&
+        state.scammers.length === 0 &&
+        state.callLogs.length === 0 &&
+        fs.existsSync(dataFile)
+      ) {
+        try {
+          const raw = fs.readFileSync(dataFile, 'utf8');
+          const existing = JSON.parse(raw);
+          if ((existing.scammers && existing.scammers.length > 0) || (existing.users && existing.users.length > 0)) {
+            console.warn('[DB] Skipping persist: preserving non-empty disk cache against boot reset.');
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
       fs.writeFileSync(dataFile, JSON.stringify(state, null, 2), 'utf8');
     } catch (err) {
       console.warn('[DB] Error saving to disk:', err);
@@ -151,7 +175,7 @@ function persistToDisk() {
 loadFromDisk();
 
 // -----------------------------------------------------------
-// PostgreSQL Database Connection Setup (Supabase Direct PostgreSQL)
+// PostgreSQL Database Connection Setup (Supabase Direct & Pooler)
 // -----------------------------------------------------------
 export function getDirectPostgresUrl(): string | null {
   const candidates = [
@@ -168,6 +192,20 @@ export function getDirectPostgresUrl(): string | null {
       return trimmed;
     }
   }
+
+  // Construct from SUPABASE_URL + SUPABASE_DB_PASSWORD if provided
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.DB;
+  const dbPass = process.env.SUPABASE_DB_PASSWORD || process.env.DATABASE_PASSWORD || process.env.DB_PASSWORD;
+  if (supabaseUrl && dbPass) {
+    const match = supabaseUrl.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/i);
+    if (match && match[1]) {
+      const projRef = match[1];
+      const encodedPass = encodeURIComponent(dbPass);
+      const region = process.env.SUPABASE_REGION || 'us-west-2';
+      return `postgresql://postgres.${projRef}:${encodedPass}@aws-0-${region}.pooler.supabase.com:6543/postgres`;
+    }
+  }
+
   return null;
 }
 
@@ -182,12 +220,12 @@ function maskDbUrl(url: string): string {
 let pgPool: pg.Pool | null = null;
 let isPostgresReady = false;
 
-let dbReadyResolver: ((ready: boolean) => void) | null = null;
+let resolveDbReady: (ready: boolean) => void = () => {};
 const dbReadyPromise = new Promise<boolean>((resolve) => {
-  dbReadyResolver = resolve;
+  resolveDbReady = resolve;
 });
 
-export async function waitForDatabaseReady(timeoutMs = 6000): Promise<boolean> {
+export async function waitForDatabaseReady(timeoutMs = 8000): Promise<boolean> {
   if (isPostgresReady) return true;
   if (!getDirectPostgresUrl()) return false;
   return Promise.race([
@@ -200,7 +238,7 @@ const directConnString = getDirectPostgresUrl();
 
 if (directConnString) {
   const masked = maskDbUrl(directConnString);
-  console.log(`[DB-SUPABASE] Detected Supabase direct PostgreSQL link: ${masked}`);
+  console.log(`[DB-SUPABASE] Detected Supabase PostgreSQL link: ${masked}`);
 
   const isDisableSsl =
     directConnString.includes('sslmode=disable') ||
@@ -210,17 +248,26 @@ if (directConnString) {
   function getFallbackConnStrings(primaryUrl: string): string[] {
     const urls = [primaryUrl];
     // Check if URL matches db.<project-ref>.supabase.co:5432 format
-    const match = primaryUrl.match(/postgres(?:ql)?:\/\/(?:([^:]+):([^@]+)@)?db\.([a-z0-9]+)\.supabase\.co/i);
+    const match = primaryUrl.match(/postgres(?:ql)?:\/\/(?:([^:]+):([^@]+)@)?db\.([a-z0-9]+)\.supabase\.co(?::\d+)?\/([^\?]+)?/i);
     if (match) {
       const pass = match[2] || '';
       const projRef = match[3];
+      const dbName = match[4] || 'postgres';
       if (projRef) {
-        // Add Supabase IPv4 Pooler candidate URLs
-        urls.push(`postgresql://postgres.${projRef}:${pass}@aws-0-us-west-2.pooler.supabase.com:6543/postgres`);
-        urls.push(`postgresql://postgres.${projRef}:${pass}@aws-0-us-west-2.pooler.supabase.com:5432/postgres`);
+        const candidateRegions = [
+          process.env.SUPABASE_REGION || 'us-west-2',
+          'us-east-1',
+          'eu-central-1',
+          'eu-west-1',
+          'ap-southeast-1',
+        ];
+        for (const r of candidateRegions) {
+          urls.push(`postgresql://postgres.${projRef}:${pass}@aws-0-${r}.pooler.supabase.com:6543/${dbName}`);
+          urls.push(`postgresql://postgres.${projRef}:${pass}@aws-0-${r}.pooler.supabase.com:5432/${dbName}`);
+        }
       }
     }
-    return urls;
+    return Array.from(new Set(urls));
   }
 
   async function tryConnectPools(candidateUrls: string[], useSsl: boolean) {
@@ -229,7 +276,7 @@ if (directConnString) {
         const testPool = new pg.Pool({
           connectionString: url,
           ssl: useSsl ? { rejectUnauthorized: false } : false,
-          connectionTimeoutMillis: 8000,
+          connectionTimeoutMillis: 7000,
           idleTimeoutMillis: 30000,
           max: 15,
           keepAlive: true,
@@ -242,12 +289,13 @@ if (directConnString) {
 
         const client = await testPool.connect();
         client.release();
-
         pgPool = testPool;
         isPostgresReady = true;
         console.log(`[DB-SUPABASE] Connected successfully to Supabase PostgreSQL database! (${maskDbUrl(url)})`);
+
         await initSupabaseDirectSchema();
-        if (dbReadyResolver) dbReadyResolver(true);
+        await hydrateStateFromPostgres();
+        resolveDbReady(true);
         return;
       } catch (err: any) {
         // try next candidate
@@ -255,11 +303,11 @@ if (directConnString) {
     }
 
     if (useSsl) {
-      console.log('[DB-SUPABASE] Retrying connection without SSL enforcement...');
+      console.log('[DB-SUPABASE] Retrying connection without strict SSL...');
       await tryConnectPools(candidateUrls, false);
     } else {
-      console.warn('[DB-SUPABASE] Notice: Operating in resilient storage mode.');
-      if (dbReadyResolver) dbReadyResolver(false);
+      console.warn('[DB-SUPABASE] Notice: Operating in resilient local storage mode.');
+      resolveDbReady(false);
     }
   }
 
@@ -267,7 +315,27 @@ if (directConnString) {
   tryConnectPools(connCandidates, !isDisableSsl);
 } else {
   console.log('[DB] No direct PostgreSQL connection string detected. Set DATABASE_URL with your Supabase direct postgres link.');
-  if (dbReadyResolver) dbReadyResolver(false);
+  resolveDbReady(false);
+}
+
+async function hydrateStateFromPostgres() {
+  if (!pgPool || !isPostgresReady) return;
+  try {
+    const [uRes, sRes, cRes, fRes] = await Promise.all([
+      pgPool.query('SELECT * FROM users ORDER BY created_at ASC'),
+      pgPool.query('SELECT * FROM scammers ORDER BY updated_at DESC'),
+      pgPool.query('SELECT * FROM call_logs ORDER BY date DESC'),
+      pgPool.query('SELECT * FROM fraud_accounts ORDER BY created_at DESC'),
+    ]);
+    if (uRes.rows.length > 0) state.users = uRes.rows.map(mapUserRow);
+    if (sRes.rows.length > 0) state.scammers = sRes.rows.map(mapScammerRow);
+    if (cRes.rows.length > 0) state.callLogs = cRes.rows.map(mapCallLogRow);
+    if (fRes.rows.length > 0) state.fraudAccounts = fRes.rows.map(mapFraudAccountRow);
+    console.log(`[DB-SUPABASE] Cache hydrated from Postgres: ${state.scammers.length} scammers, ${state.callLogs.length} calls, ${state.fraudAccounts.length} fraud accounts.`);
+    persistToDisk();
+  } catch (err) {
+    console.warn('[DB-SUPABASE] Hydration warning:', err);
+  }
 }
 
 async function initSupabaseDirectSchema() {
@@ -506,6 +574,7 @@ export const db = {
       select?: any;
     }): Promise<UserRecord | null> {
       const { id, email, googleId, activationToken } = args.where;
+
       if (isPostgresReady && pgPool) {
         try {
           let res;
@@ -641,12 +710,12 @@ export const db = {
       if (isPostgresReady && pgPool) {
         try {
           const res = await pgPool.query(
-            `INSERT INTO users (id, email, password, name, avatar_url, google_id, role, is_activated, has_accepted_terms, activation_token, activation_expires_at, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-             ON CONFLICT (email) DO UPDATE SET
-               name = EXCLUDED.name,
-               password = COALESCE(EXCLUDED.password, users.password),
-               avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
+            `INSERT INTO users (id, email, password, name, avatar_url, google_id, role, is_activated, has_accepted_terms, activation_token, activation_expires_at, created_at, updated_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+             ON CONFLICT (email) DO UPDATE SET 
+               name = EXCLUDED.name, 
+               password = COALESCE(EXCLUDED.password, users.password), 
+               avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url), 
                google_id = COALESCE(EXCLUDED.google_id, users.google_id),
                role = EXCLUDED.role,
                is_activated = EXCLUDED.is_activated,
@@ -654,33 +723,33 @@ export const db = {
                activation_token = EXCLUDED.activation_token,
                activation_expires_at = EXCLUDED.activation_expires_at,
                updated_at = NOW()
-             RETURNING id`,
+             RETURNING *`,
             [
-              user.id,
-              user.email,
-              user.password,
-              user.name,
-              user.avatarUrl,
-              user.googleId,
-              user.role,
-              user.isActivated,
-              user.hasAcceptedTerms,
-              user.activationToken,
-              user.activationExpiresAt,
-              user.createdAt,
-              user.updatedAt
+              user.id, user.email, user.password, user.name, user.avatarUrl,
+              user.googleId, user.role, user.isActivated, user.hasAcceptedTerms,
+              user.activationToken, user.activationExpiresAt, user.createdAt, user.updatedAt
             ]
           );
-          if (res?.rows?.[0]?.id) {
-            user.id = res.rows[0].id;
+          if (res.rows[0]) {
+            const saved = mapUserRow(res.rows[0]);
+            const existingIdx = state.users.findIndex((u) => u.id === saved.id || u.email === saved.email);
+            if (existingIdx >= 0) state.users[existingIdx] = saved; else state.users.push(saved);
+            persistToDisk();
+            return decorateUser(saved);
           }
         } catch (err) {
-          console.warn('[DB-SUPABASE] create user warning:', err);
+          console.warn('[DB-SUPABASE] Direct create user fallback:', err);
         }
       }
 
-      const idx = state.users.findIndex((u) => u.id === user.id);
-      if (idx >= 0) state.users[idx] = user; else state.users.push(user);
+      const existingIdx = state.users.findIndex((u) => u.email === user.email);
+      if (existingIdx >= 0) {
+        state.users[existingIdx] = { ...state.users[existingIdx], ...user, updatedAt: now };
+        persistToDisk();
+        return decorateUser(state.users[existingIdx]);
+      }
+
+      state.users.push(user);
       persistToDisk();
       return decorateUser(user);
     },
@@ -690,125 +759,116 @@ export const db = {
       data: Partial<UserRecord>;
       select?: any;
     }): Promise<UserRecord> {
-      const idx = state.users.findIndex(
-        (u) =>
-          (args.where.id !== undefined && u.id === args.where.id) ||
-          (args.where.email !== undefined && u.email?.toLowerCase() === args.where.email?.toLowerCase())
-      );
-      const current = idx >= 0 ? state.users[idx] : null;
-      const updated: UserRecord = {
-        ...(current || { id: args.where.id || crypto.randomUUID(), email: args.where.email || '', name: 'Admin', role: 'admin', isActivated: true, createdAt: new Date() }),
-        ...args.data,
-        updatedAt: new Date(),
-      };
+      let updatedUser: UserRecord | null = null;
 
       if (isPostgresReady && pgPool) {
         try {
+          const sets: string[] = [];
+          const values: any[] = [];
+          let pIdx = 1;
+
+          if (args.data.name !== undefined) { sets.push(`name = $${pIdx++}`); values.push(args.data.name); }
+          if (args.data.password !== undefined) { sets.push(`password = $${pIdx++}`); values.push(args.data.password); }
+          if (args.data.avatarUrl !== undefined) { sets.push(`avatar_url = $${pIdx++}`); values.push(args.data.avatarUrl); }
+          if (args.data.googleId !== undefined) { sets.push(`google_id = $${pIdx++}`); values.push(args.data.googleId); }
+          if (args.data.role !== undefined) { sets.push(`role = $${pIdx++}`); values.push(args.data.role); }
+          if (args.data.isActivated !== undefined) { sets.push(`is_activated = $${pIdx++}`); values.push(args.data.isActivated); }
+          if (args.data.hasAcceptedTerms !== undefined) { sets.push(`has_accepted_terms = $${pIdx++}`); values.push(args.data.hasAcceptedTerms); }
+          if (args.data.activationToken !== undefined) { sets.push(`activation_token = $${pIdx++}`); values.push(args.data.activationToken); }
+          if (args.data.activationExpiresAt !== undefined) { sets.push(`activation_expires_at = $${pIdx++}`); values.push(args.data.activationExpiresAt); }
+          
+          sets.push(`updated_at = NOW()`);
+
+          let whereClause = '';
           if (args.where.id) {
-            await pgPool.query(
-              `UPDATE users SET
-                 email = COALESCE($1, email),
-                 name = COALESCE($2, name),
-                 password = COALESCE($3, password),
-                 role = COALESCE($4, role),
-                 avatar_url = COALESCE($5, avatar_url),
-                 is_activated = COALESCE($6, is_activated),
-                 has_accepted_terms = COALESCE($7, has_accepted_terms),
-                 activation_token = $8,
-                 activation_expires_at = $9,
-                 updated_at = NOW()
-               WHERE id = $10`,
-              [
-                updated.email,
-                updated.name,
-                updated.password,
-                updated.role,
-                updated.avatarUrl,
-                updated.isActivated,
-                updated.hasAcceptedTerms,
-                updated.activationToken ?? null,
-                updated.activationExpiresAt ?? null,
-                args.where.id
-              ]
-            );
+            whereClause = `WHERE id = $${pIdx}`;
+            values.push(args.where.id);
           } else if (args.where.email) {
-            await pgPool.query(
-              `UPDATE users SET
-                 name = COALESCE($1, name),
-                 password = COALESCE($2, password),
-                 role = COALESCE($3, role),
-                 avatar_url = COALESCE($4, avatar_url),
-                 is_activated = COALESCE($5, is_activated),
-                 activation_token = $6,
-                 activation_expires_at = $7,
-                 updated_at = NOW()
-               WHERE LOWER(email) = LOWER($8)`,
-              [
-                updated.name,
-                updated.password,
-                updated.role,
-                updated.avatarUrl,
-                updated.isActivated,
-                updated.activationToken ?? null,
-                updated.activationExpiresAt ?? null,
-                args.where.email
-              ]
-            );
+            whereClause = `WHERE LOWER(email) = LOWER($${pIdx})`;
+            values.push(args.where.email);
+          }
+
+          if (sets.length > 1 && whereClause) {
+            const query = `UPDATE users SET ${sets.join(', ')} ${whereClause} RETURNING *`;
+            const res = await pgPool.query(query, values);
+            if (res.rows[0]) {
+              updatedUser = mapUserRow(res.rows[0]);
+            }
           }
         } catch (err) {
-          console.warn('[DB-POSTGRES] update user warning:', err);
+          console.warn('[DB-POSTGRES] update user fallback:', err);
         }
       }
 
+      const idx = state.users.findIndex(
+        (u) =>
+          (args.where.id && u.id === args.where.id) ||
+          (args.where.email && u.email.toLowerCase() === args.where.email.toLowerCase())
+      );
+
+      if (!updatedUser) {
+        if (idx === -1) throw new Error('User not found for update');
+        updatedUser = {
+          ...state.users[idx],
+          ...args.data,
+          updatedAt: new Date(),
+        };
+      }
+
       if (idx >= 0) {
-        state.users[idx] = updated;
+        state.users[idx] = updatedUser;
       } else {
-        state.users.push(updated);
+        state.users.push(updatedUser);
       }
       persistToDisk();
-      return decorateUser(updated);
+
+      return decorateUser(updatedUser);
     },
 
     async delete(args: { where: { id: string } }): Promise<UserRecord> {
+      let deleted: UserRecord | null = null;
       if (isPostgresReady && pgPool) {
         try {
-          await pgPool.query('DELETE FROM users WHERE id = $1', [args.where.id]);
+          const res = await pgPool.query('DELETE FROM users WHERE id = $1 RETURNING *', [args.where.id]);
+          if (res.rows[0]) {
+            deleted = mapUserRow(res.rows[0]);
+          }
         } catch (err) {
-          console.warn('[DB-POSTGRES] delete user warning:', err);
+          console.warn('[DB-POSTGRES] delete user fallback:', err);
         }
       }
 
       const idx = state.users.findIndex((u) => u.id === args.where.id);
-      if (idx === -1) {
-        return decorateUser({ id: args.where.id, email: '', name: '', role: 'scambaiter', createdAt: new Date(), updatedAt: new Date() });
+      if (idx >= 0) {
+        const [memDeleted] = state.users.splice(idx, 1);
+        if (!deleted) deleted = memDeleted;
       }
-      const [deleted] = state.users.splice(idx, 1);
       persistToDisk();
+      if (!deleted) throw new Error('User not found for deletion');
       return decorateUser(deleted);
     },
 
     async deleteMany(args?: { where?: Record<string, any> }): Promise<{ count: number }> {
-      let count = 0;
-      if (isPostgresReady && pgPool && args?.where?.email?.in) {
+      if (isPostgresReady && pgPool) {
         try {
-          const res = await pgPool.query('DELETE FROM users WHERE email = ANY($1)', [args.where.email.in]);
-          count = res.rowCount || 0;
+          if (args?.where?.email?.in) {
+            await pgPool.query('DELETE FROM users WHERE email = ANY($1)', [args.where.email.in]);
+          } else {
+            await pgPool.query('DELETE FROM users');
+          }
         } catch (err) {
           console.warn('[DB-POSTGRES] deleteMany users warning:', err);
         }
       }
 
-      const remaining: UserRecord[] = [];
-      for (const u of state.users) {
-        if (matchesWhere(u, args?.where)) {
-          count++;
-        } else {
-          remaining.push(u);
-        }
+      const beforeCount = state.users.length;
+      if (!args?.where) {
+        state.users = [];
+      } else {
+        state.users = state.users.filter((u) => !matchesWhere(u, args.where));
       }
-      state.users = remaining;
       persistToDisk();
-      return { count };
+      return { count: beforeCount - state.users.length };
     },
   },
 
@@ -825,7 +885,7 @@ export const db = {
           const mappedScammers = res.rows.map(mapScammerRow);
           state.scammers = mappedScammers;
 
-          // Always keep call logs and fraud accounts synchronized in memory from PostgreSQL
+          // Keep call logs and fraud accounts synchronized in memory from PostgreSQL
           const [callRes, fraudRes] = await Promise.all([
             pgPool.query('SELECT * FROM call_logs ORDER BY date DESC'),
             pgPool.query('SELECT * FROM fraud_accounts ORDER BY created_at DESC'),
@@ -1003,18 +1063,11 @@ export const db = {
       data: Partial<ScammerRecord>;
       include?: any;
     }): Promise<ScammerRecord> {
-      const idx = state.scammers.findIndex((s) => s.id === args.where.id);
-      if (idx === -1) throw new Error('Scammer not found for update');
-      const current = state.scammers[idx];
-      const updated: ScammerRecord = {
-        ...current,
-        ...args.data,
-        updatedAt: new Date(),
-      };
+      let updated: ScammerRecord | null = null;
 
       if (isPostgresReady && pgPool) {
         try {
-          await pgPool.query(
+          const res = await pgPool.query(
             `UPDATE scammers SET
                full_name = COALESCE($1, full_name),
                alias = COALESCE($2, alias),
@@ -1036,49 +1089,75 @@ export const db = {
                target_value = COALESCE($18, target_value),
                priority = COALESCE($19, priority),
                updated_at = NOW()
-             WHERE id = $20`,
+             WHERE id = $20
+             RETURNING *`,
             [
-              updated.fullName, updated.alias, updated.phoneNumber,
-              updated.phoneNumbers, updated.whatsappNumber, updated.status,
-              updated.carrier, updated.location, updated.scamType, updated.organization,
-              updated.flagged, updated.dangerLevel, updated.victimGivenInfo, updated.remoteAccessId,
-              updated.ipAddress, updated.notes, updated.totalTimeSpent, updated.targetValue,
-              updated.priority, updated.id
+              args.data.fullName, args.data.alias, args.data.phoneNumber,
+              args.data.phoneNumbers, args.data.whatsappNumber, args.data.status,
+              args.data.carrier, args.data.location, args.data.scamType, args.data.organization,
+              args.data.flagged, args.data.dangerLevel, args.data.victimGivenInfo, args.data.remoteAccessId,
+              args.data.ipAddress, args.data.notes, args.data.totalTimeSpent, args.data.targetValue,
+              args.data.priority, args.where.id
             ]
           );
+          if (res.rows[0]) {
+            updated = mapScammerRow(res.rows[0]);
+          }
         } catch (err) {
           console.warn('[DB-POSTGRES] update scammer warning:', err);
         }
       }
 
-      state.scammers[idx] = updated;
+      const idx = state.scammers.findIndex((s) => s.id === args.where.id);
+      if (!updated) {
+        if (idx === -1) throw new Error('Scammer not found for update');
+        const current = state.scammers[idx];
+        updated = {
+          ...current,
+          ...args.data,
+          updatedAt: new Date(),
+        };
+      }
+
+      if (idx >= 0) {
+        state.scammers[idx] = updated;
+      } else {
+        state.scammers.push(updated);
+      }
       persistToDisk();
 
       const res: ScammerRecord = { ...updated };
       if (args.include?.calls) {
-        res.calls = state.callLogs.filter((c) => c.scammerId === updated.id).map((c) => ({ ...c }));
+        res.calls = state.callLogs.filter((c) => c.scammerId === updated!.id).map((c) => ({ ...c }));
       }
       if (args.include?.fraudAccounts) {
-        res.fraudAccounts = state.fraudAccounts.filter((f) => f.scammerId === updated.id).map((f) => ({ ...f }));
+        res.fraudAccounts = state.fraudAccounts.filter((f) => f.scammerId === updated!.id).map((f) => ({ ...f }));
       }
       return res;
     },
 
     async delete(args: { where: { id: string } }): Promise<ScammerRecord> {
+      let deleted: ScammerRecord | null = null;
       if (isPostgresReady && pgPool) {
         try {
-          await pgPool.query('DELETE FROM scammers WHERE id = $1', [args.where.id]);
+          const res = await pgPool.query('DELETE FROM scammers WHERE id = $1 RETURNING *', [args.where.id]);
+          if (res.rows[0]) {
+            deleted = mapScammerRow(res.rows[0]);
+          }
         } catch (err) {
           console.warn('[DB-POSTGRES] delete scammer warning:', err);
         }
       }
 
       const idx = state.scammers.findIndex((s) => s.id === args.where.id);
-      if (idx === -1) throw new Error('Scammer not found for deletion');
-      const [deleted] = state.scammers.splice(idx, 1);
+      if (idx >= 0) {
+        const [memDeleted] = state.scammers.splice(idx, 1);
+        if (!deleted) deleted = memDeleted;
+      }
       state.callLogs = state.callLogs.filter((c) => c.scammerId !== args.where.id);
       state.fraudAccounts = state.fraudAccounts.filter((f) => f.scammerId !== args.where.id);
       persistToDisk();
+      if (!deleted) throw new Error('Scammer not found for deletion');
       return { ...deleted };
     },
 
@@ -1094,20 +1173,24 @@ export const db = {
           console.warn('[DB-POSTGRES] deleteMany scammers warning:', err);
         }
       }
+
       const beforeCount = state.scammers.length;
       if (!args?.where) {
         state.scammers = [];
         state.callLogs = [];
         state.fraudAccounts = [];
       } else {
-        state.scammers = state.scammers.filter((s) => !matchesWhere(s, args.where));
+        const toDeleteIds = state.scammers.filter((s) => matchesWhere(s, args.where)).map((s) => s.id);
+        state.scammers = state.scammers.filter((s) => !toDeleteIds.includes(s.id));
+        state.callLogs = state.callLogs.filter((c) => !toDeleteIds.includes(c.scammerId));
+        state.fraudAccounts = state.fraudAccounts.filter((f) => !toDeleteIds.includes(f.scammerId));
       }
       persistToDisk();
       return { count: beforeCount - state.scammers.length };
     },
 
     async count(args?: { where?: Record<string, any> }): Promise<number> {
-      if (isPostgresReady && pgPool) {
+      if (isPostgresReady && pgPool && (!args?.where || Object.keys(args.where).length === 0)) {
         try {
           const res = await pgPool.query('SELECT COUNT(*) FROM scammers');
           return parseInt(res.rows[0].count, 10) || 0;
@@ -1115,7 +1198,6 @@ export const db = {
           console.warn('[DB-POSTGRES] count scammers fallback:', err);
         }
       }
-
       if (!args?.where) return state.scammers.length;
       return state.scammers.filter((s) => matchesWhere(s, args.where)).length;
     },
@@ -1231,18 +1313,11 @@ export const db = {
       data: Partial<CallLogRecord>;
       include?: any;
     }): Promise<CallLogRecord> {
-      const idx = state.callLogs.findIndex((c) => c.id === args.where.id);
-      if (idx === -1) throw new Error('Call log not found for update');
-      const current = state.callLogs[idx];
-      const updated: CallLogRecord = {
-        ...current,
-        ...args.data,
-        updatedAt: new Date(),
-      };
+      let updated: CallLogRecord | null = null;
 
       if (isPostgresReady && pgPool) {
         try {
-          await pgPool.query(
+          const res = await pgPool.query(
             `UPDATE call_logs SET
                duration_minutes = COALESCE($1, duration_minutes),
                notes = COALESCE($2, notes),
@@ -1252,36 +1327,62 @@ export const db = {
                info_given = COALESCE($6, info_given),
                outcome = COALESCE($7, outcome),
                updated_at = NOW()
-             WHERE id = $8`,
+             WHERE id = $8
+             RETURNING *`,
             [
-              updated.durationMinutes, updated.notes, updated.audioRecordingUrl,
-              updated.audioRecordingName, updated.victimPersonaUsed, updated.infoGiven,
-              updated.outcome, updated.id
+              args.data.durationMinutes, args.data.notes, args.data.audioRecordingUrl,
+              args.data.audioRecordingName, args.data.victimPersonaUsed, args.data.infoGiven,
+              args.data.outcome, args.where.id
             ]
           );
+          if (res.rows[0]) {
+            updated = mapCallLogRow(res.rows[0]);
+          }
         } catch (err) {
           console.warn('[DB-POSTGRES] update call_log warning:', err);
         }
       }
 
-      state.callLogs[idx] = updated;
+      const idx = state.callLogs.findIndex((c) => c.id === args.where.id);
+      if (!updated) {
+        if (idx === -1) throw new Error('Call log not found for update');
+        const current = state.callLogs[idx];
+        updated = {
+          ...current,
+          ...args.data,
+          updatedAt: new Date(),
+        };
+      }
+
+      if (idx >= 0) {
+        state.callLogs[idx] = updated;
+      } else {
+        state.callLogs.push(updated);
+      }
       persistToDisk();
       return { ...updated };
     },
 
     async delete(args: { where: { id: string } }): Promise<CallLogRecord> {
+      let deleted: CallLogRecord | null = null;
       if (isPostgresReady && pgPool) {
         try {
-          await pgPool.query('DELETE FROM call_logs WHERE id = $1', [args.where.id]);
+          const res = await pgPool.query('DELETE FROM call_logs WHERE id = $1 RETURNING *', [args.where.id]);
+          if (res.rows[0]) {
+            deleted = mapCallLogRow(res.rows[0]);
+          }
         } catch (err) {
           console.warn('[DB-POSTGRES] delete call_log warning:', err);
         }
       }
 
       const idx = state.callLogs.findIndex((c) => c.id === args.where.id);
-      if (idx === -1) throw new Error('Call log not found for deletion');
-      const [deleted] = state.callLogs.splice(idx, 1);
+      if (idx >= 0) {
+        const [memDeleted] = state.callLogs.splice(idx, 1);
+        if (!deleted) deleted = memDeleted;
+      }
       persistToDisk();
+      if (!deleted) throw new Error('Call log not found for deletion');
       return { ...deleted };
     },
 
@@ -1293,6 +1394,7 @@ export const db = {
           console.warn('[DB-POSTGRES] deleteMany call_logs warning:', err);
         }
       }
+
       const beforeCount = state.callLogs.length;
       if (!args?.where) {
         state.callLogs = [];
@@ -1373,18 +1475,25 @@ export const db = {
     },
 
     async delete(args: { where: { id: string } }): Promise<FraudAccountRecord> {
+      let deleted: FraudAccountRecord | null = null;
       if (isPostgresReady && pgPool) {
         try {
-          await pgPool.query('DELETE FROM fraud_accounts WHERE id = $1', [args.where.id]);
+          const res = await pgPool.query('DELETE FROM fraud_accounts WHERE id = $1 RETURNING *', [args.where.id]);
+          if (res.rows[0]) {
+            deleted = mapFraudAccountRow(res.rows[0]);
+          }
         } catch (err) {
           console.warn('[DB-POSTGRES] delete fraud_account warning:', err);
         }
       }
 
       const idx = state.fraudAccounts.findIndex((f) => f.id === args.where.id);
-      if (idx === -1) throw new Error('Fraud account not found for deletion');
-      const [deleted] = state.fraudAccounts.splice(idx, 1);
+      if (idx >= 0) {
+        const [memDeleted] = state.fraudAccounts.splice(idx, 1);
+        if (!deleted) deleted = memDeleted;
+      }
       persistToDisk();
+      if (!deleted) throw new Error('Fraud account not found for deletion');
       return { ...deleted };
     },
 
@@ -1396,6 +1505,7 @@ export const db = {
           console.warn('[DB-POSTGRES] deleteMany fraud_accounts warning:', err);
         }
       }
+
       const beforeCount = state.fraudAccounts.length;
       if (!args?.where) {
         state.fraudAccounts = [];
