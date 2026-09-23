@@ -18,6 +18,8 @@ import {
   UserCheck,
   PhoneCall,
   Crown,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { api } from '../api.ts';
 import type { User, ManagedUser, AdminStats } from '../types.ts';
@@ -164,6 +166,9 @@ export const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ curren
     }
   };
 
+  // View toggle: 'cards' (Odoo clean horizontal contact cards) or 'list' (clean table)
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+
   const filteredUsers = users.filter((u) => {
     if (roleFilter === 'admin' && u.role !== 'admin' && u.role !== 'admin_scambaiter') return false;
     if (roleFilter === 'scambaiter' && (u.role === 'admin' || u.role === 'admin_scambaiter'))
@@ -262,7 +267,7 @@ export const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ curren
         </div>
       )}
 
-      {/* Controls: Search & Role Filter */}
+      {/* Controls: Search, Role Filter & View Switcher */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
@@ -272,30 +277,29 @@ export const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ curren
             placeholder="Search by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
+            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#714B67]"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs text-slate-400 hidden sm:inline font-medium">Filter:</span>
-          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
             <button
               type="button"
               onClick={() => setRoleFilter('all')}
-              className={`flex-1 sm:flex-none px-3 py-1 rounded-lg font-medium transition ${
+              className={`px-3 py-1 rounded-lg font-medium transition ${
                 roleFilter === 'all'
-                  ? 'bg-rose-600 text-white shadow'
+                  ? 'bg-[#714B67] text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              All Users ({users.length})
+              All ({users.length})
             </button>
             <button
               type="button"
               onClick={() => setRoleFilter('admin')}
-              className={`flex-1 sm:flex-none px-3 py-1 rounded-lg font-medium transition ${
+              className={`px-3 py-1 rounded-lg font-medium transition ${
                 roleFilter === 'admin'
-                  ? 'bg-rose-600 text-white shadow'
+                  ? 'bg-[#714B67] text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -304,202 +308,389 @@ export const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ curren
             <button
               type="button"
               onClick={() => setRoleFilter('scambaiter')}
-              className={`flex-1 sm:flex-none px-3 py-1 rounded-lg font-medium transition ${
+              className={`px-3 py-1 rounded-lg font-medium transition ${
                 roleFilter === 'scambaiter'
-                  ? 'bg-rose-600 text-white shadow'
+                  ? 'bg-[#714B67] text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               Agents
             </button>
           </div>
+
+          {/* Odoo View Mode Switcher: Horizontal Cards vs Table List */}
+          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              className={`p-1.5 rounded-lg transition ${
+                viewMode === 'cards'
+                  ? 'bg-[#714B67] text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Odoo Card View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-lg transition ${
+                viewMode === 'list'
+                  ? 'bg-[#714B67] text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Table List View"
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-slate-800/80 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-                <th className="py-3.5 px-4 sm:px-6">User / Call Sign</th>
-                <th className="py-3.5 px-4">Role & Status</th>
-                <th className="py-3.5 px-4">Registration & Auth</th>
-                <th className="py-3.5 px-4 text-center">Cases Logged</th>
-                <th className="py-3.5 px-4 sm:px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-500">
-                    <div className="w-6 h-6 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin mx-auto mb-2"></div>
-                    Loading registered users...
-                  </td>
-                </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-500">
-                    No users found matching your search.
-                  </td>
-                </tr>
-              ) : (
-                filteredUsers.map((u) => {
-                  const isAdmin = u.role === 'admin' || u.role === 'admin_scambaiter';
-                  const isCurrent = u.id === currentUser.id;
-                  const isGmailLinked = Boolean(u.googleId || u.email.endsWith('@gmail.com'));
+      {/* VIEW 1: ODOO HORIZONTAL CONTACT CARDS (Cleaner, effortless, spacious layout) */}
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {loading ? (
+            <div className="col-span-full py-16 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800">
+              <div className="w-7 h-7 border-2 border-[#714B67] border-t-white rounded-full animate-spin mx-auto mb-2"></div>
+              <span>Loading users...</span>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="col-span-full py-16 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800">
+              <span>No users found matching your search.</span>
+            </div>
+          ) : (
+            filteredUsers.map((u) => {
+              const isAdmin = u.role === 'admin' || u.role === 'admin_scambaiter';
+              const isCurrent = u.id === currentUser.id;
+              const isGmailLinked = Boolean(u.googleId || u.email.endsWith('@gmail.com'));
+              const initials =
+                u.name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase() || 'US';
 
-                  return (
-                    <tr key={u.id} className="hover:bg-slate-800/40 transition">
-                      {/* Name & Avatar */}
-                      <td className="py-4 px-4 sm:px-6">
-                        <div className="flex items-center gap-3">
-                          {u.avatarUrl ? (
-                            <img
-                              src={u.avatarUrl}
-                              alt={u.name}
-                              className="w-9 h-9 rounded-full object-cover border border-slate-700"
-                            />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold">
-                              {u.name.slice(0, 1).toUpperCase()}
-                            </div>
+              return (
+                <div
+                  key={u.id}
+                  className="bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-slate-700/80 rounded-xl p-4 transition-all duration-150 shadow-md hover:shadow-xl flex flex-col justify-between gap-3 group relative"
+                >
+                  {/* Top Horizontal Row: Avatar, Identity & Role Badge */}
+                  <div className="flex items-start gap-3.5">
+                    {/* User Avatar */}
+                    {u.avatarUrl ? (
+                      <img
+                        src={u.avatarUrl}
+                        alt={u.name}
+                        className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0 shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#714B67] to-slate-700 border border-slate-600 flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm">
+                        {initials}
+                      </div>
+                    )}
+
+                    {/* Name, Status & Role */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <h3 className="font-extrabold text-sm text-white truncate flex items-center gap-1.5">
+                          <span>{u.name}</span>
+                          {isCurrent && (
+                            <span className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 text-[10px] font-semibold border border-rose-500/30">
+                              You
+                            </span>
                           )}
-                          <div>
-                            <div className="font-semibold text-slate-100 flex items-center gap-1.5">
-                              <span>{u.name}</span>
-                              {isCurrent && (
-                                <span className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 text-[10px] font-semibold border border-rose-500/30">
-                                  You
+                        </h3>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-slate-400 text-xs truncate mt-0.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        <span className="truncate">{u.email}</span>
+                      </div>
+
+                      {/* Horizontal role badge */}
+                      <div className="mt-2 flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            isAdmin
+                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                              : 'bg-teal-500/10 text-teal-400 border-teal-500/30'
+                          }`}
+                        >
+                          {isAdmin ? (
+                            <>
+                              <Crown className="w-3 h-3 text-amber-400" />
+                              <span>Administrator</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck className="w-3 h-3 text-teal-400" />
+                              <span>Scambaiter Agent</span>
+                            </>
+                          )}
+                        </span>
+
+                        {isGmailLinked ? (
+                          <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            Google
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Password Auth</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Horizontal Info Strip: Cases Logged & Date */}
+                  <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1 font-semibold text-slate-300">
+                        <Shield className="w-3.5 h-3.5 text-rose-400" />
+                        <span>{u.scammersCount} cases</span>
+                      </div>
+                      <span className="text-slate-600">•</span>
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                        <Calendar className="w-3 h-3 text-slate-500" />
+                        <span>{new Date(u.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                    </div>
+
+                    {/* Quick Action Buttons (horizontal toolbar) */}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenResetPassword(u)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                        title="Reset password"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isCurrent}
+                        onClick={() => handleRoleToggle(u)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                          isCurrent
+                            ? 'opacity-30 cursor-not-allowed bg-slate-800 text-slate-500 border-slate-700'
+                            : isAdmin
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                            : 'bg-[#714B67]/20 hover:bg-[#714B67]/40 text-[#d4a8c9] border-[#714B67]/40'
+                        }`}
+                        title={isAdmin ? 'Demote to Agent' : 'Promote to Admin'}
+                      >
+                        {isAdmin ? 'Make Agent' : 'Make Admin'}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isCurrent || deletingUserId === u.id}
+                        onClick={() => handleDeleteUser(u)}
+                        className={`p-1.5 rounded-lg transition ${
+                          isCurrent
+                            ? 'opacity-30 cursor-not-allowed text-slate-600'
+                            : 'text-slate-400 hover:text-rose-400 hover:bg-rose-500/10'
+                        }`}
+                        title="Delete user"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* VIEW 2: TABLE LIST VIEW (Secondary View) */}
+      {viewMode === 'list' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800/80 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                  <th className="py-3.5 px-4 sm:px-6">User / Call Sign</th>
+                  <th className="py-3.5 px-4">Role & Status</th>
+                  <th className="py-3.5 px-4">Registration & Auth</th>
+                  <th className="py-3.5 px-4 text-center">Cases Logged</th>
+                  <th className="py-3.5 px-4 sm:px-6 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-500">
+                      <div className="w-6 h-6 border-2 border-[#714B67] border-t-white rounded-full animate-spin mx-auto mb-2"></div>
+                      Loading registered users...
+                    </td>
+                  </tr>
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-500">
+                      No users found matching your search.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((u) => {
+                    const isAdmin = u.role === 'admin' || u.role === 'admin_scambaiter';
+                    const isCurrent = u.id === currentUser.id;
+                    const isGmailLinked = Boolean(u.googleId || u.email.endsWith('@gmail.com'));
+
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-800/40 transition">
+                        {/* Name & Avatar */}
+                        <td className="py-4 px-4 sm:px-6">
+                          <div className="flex items-center gap-3">
+                            {u.avatarUrl ? (
+                              <img
+                                src={u.avatarUrl}
+                                alt={u.name}
+                                className="w-9 h-9 rounded-full object-cover border border-slate-700"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold">
+                                {u.name.slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-semibold text-slate-100 flex items-center gap-1.5">
+                                <span>{u.name}</span>
+                                {isCurrent && (
+                                  <span className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 text-[10px] font-semibold border border-rose-500/30">
+                                    You
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-slate-400 text-[11px] flex items-center gap-1 mt-0.5">
+                                <Mail className="w-3 h-3 text-slate-500" />
+                                <span>{u.email}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Role */}
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                                isAdmin
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                  : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                              }`}
+                            >
+                              {isAdmin ? (
+                                <>
+                                  <Crown className="w-3 h-3 text-amber-400" />
+                                  <span>Administrator</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ShieldCheck className="w-3 h-3 text-blue-400" />
+                                  <span>Scambaiter Agent</span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Auth Type & Date */}
+                        <td className="py-4 px-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-slate-300 text-[11px]">
+                              {isGmailLinked ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                  Google / Gmail Auth
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                                  Email & Password
                                 </span>
                               )}
                             </div>
-                            <div className="text-slate-400 text-[11px] flex items-center gap-1 mt-0.5">
-                              <Mail className="w-3 h-3 text-slate-500" />
-                              <span>{u.email}</span>
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-500" />
+                              <span>Joined {new Date(u.createdAt).toLocaleDateString()}</span>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Role */}
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
-                              isAdmin
-                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                                : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                            }`}
-                          >
-                            {isAdmin ? (
-                              <>
-                                <Crown className="w-3 h-3 text-amber-400" />
-                                <span>Administrator</span>
-                              </>
-                            ) : (
-                              <>
-                                <ShieldCheck className="w-3 h-3 text-blue-400" />
-                                <span>Scambaiter Agent</span>
-                              </>
-                            )}
+                        {/* Cases count */}
+                        <td className="py-4 px-4 text-center">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs">
+                            {u.scammersCount}
                           </span>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Auth Type & Date */}
-                      <td className="py-4 px-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 text-slate-300 text-[11px]">
-                            {isGmailLinked ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                Google / Gmail Auth
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                                Email & Password
-                              </span>
-                            )}
+                        {/* Actions */}
+                        <td className="py-4 px-4 sm:px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              disabled={isCurrent}
+                              onClick={() => handleRoleToggle(u)}
+                              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                                isCurrent
+                                  ? 'opacity-40 cursor-not-allowed bg-slate-800 border-slate-700 text-slate-500'
+                                  : isAdmin
+                                  ? 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700 hover:border-slate-600'
+                                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
+                              }`}
+                              title={
+                                isCurrent
+                                  ? 'Cannot modify your own active role'
+                                  : isAdmin
+                                  ? 'Demote to Scambaiter Agent'
+                                  : 'Promote to Administrator'
+                              }
+                            >
+                              {isAdmin ? 'Make Agent' : 'Make Admin'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenResetPassword(u)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition"
+                              title="Reset Password"
+                            >
+                              <Key className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={isCurrent || deletingUserId === u.id}
+                              onClick={() => handleDeleteUser(u)}
+                              className={`p-1.5 rounded-lg border transition ${
+                                isCurrent
+                                  ? 'opacity-40 cursor-not-allowed bg-slate-800 border-slate-700 text-slate-600'
+                                  : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30'
+                              }`}
+                              title={
+                                isCurrent
+                                  ? 'Cannot delete your own account'
+                                  : 'Delete User Permanently'
+                              }
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
-                          <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                            <Calendar className="w-3 h-3 text-slate-500" />
-                            <span>Joined {new Date(u.createdAt).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Cases count */}
-                      <td className="py-4 px-4 text-center">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs">
-                          {u.scammersCount}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-4 px-4 sm:px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Toggle Role */}
-                          <button
-                            type="button"
-                            disabled={isCurrent}
-                            onClick={() => handleRoleToggle(u)}
-                            className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                              isCurrent
-                                ? 'opacity-40 cursor-not-allowed bg-slate-800 border-slate-700 text-slate-500'
-                                : isAdmin
-                                ? 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700 hover:border-slate-600'
-                                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
-                            }`}
-                            title={
-                              isCurrent
-                                ? 'Cannot modify your own active role'
-                                : isAdmin
-                                ? 'Demote to Scambaiter Agent'
-                                : 'Promote to Administrator'
-                            }
-                          >
-                            {isAdmin ? 'Make Agent' : 'Make Admin'}
-                          </button>
-
-                          {/* Reset Password */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenResetPassword(u)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition"
-                            title="Reset Password"
-                          >
-                            <Key className="w-4 h-4" />
-                          </button>
-
-                          {/* Delete */}
-                          <button
-                            type="button"
-                            disabled={isCurrent || deletingUserId === u.id}
-                            onClick={() => handleDeleteUser(u)}
-                            className={`p-1.5 rounded-lg border transition ${
-                              isCurrent
-                                ? 'opacity-40 cursor-not-allowed bg-slate-800 border-slate-700 text-slate-600'
-                                : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30'
-                            }`}
-                            title={
-                              isCurrent
-                                ? 'Cannot delete your own account'
-                                : 'Delete User Permanently'
-                            }
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Modal: Add New User */}
       {isAddUserOpen && (
