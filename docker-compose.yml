@@ -12,41 +12,40 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DB=${DB:-https://fanivhbjwfaiezpsawpa.supabase.co}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - DIRECT_URL=${DIRECT_URL:-}
       - SUPABASE_URL=${SUPABASE_URL:-https://fanivhbjwfaiezpsawpa.supabase.co}
       - SUPABASE_KEY=${SUPABASE_KEY:-}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
-      - DATABASE_URL=${DATABASE_URL:-}
-      - DIRECT_URL=${DIRECT_URL:-}
-      - ADMIN_USER=${ADMIN_USER:-sbadmin@cookiebaits}
+      - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD:-}
+      - SUPABASE_REGION=${SUPABASE_REGION:-us-west-2}
+      - ADMIN_USER=${ADMIN_USER:-cookiescambait@gmail.com}
       - ADMIN_PASS=${ADMIN_PASS:-sbAdmin2026!#}
       - JWT_SECRET=${JWT_SECRET:-super-secret-dokploy-scambaiter-key-2026}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - APP_URL=${APP_URL:-https://your-domain.com}
+      - DATA_DIR=/app/data
     volumes:
-      # Persistent volume for local fallback & Cloudflare S3/R2 backup
+      # Persistent named volume - survives restarts and updates
       - scambaiter_db_data:/app/data
+      # Alternatively, to use a host bind mount in Dokploy, replace the line above with:
+      # - ./data:/app/data
     networks:
       - dokploy-network
       - default
     labels:
-      # Enable Traefik for Dokploy
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
-      # HTTP entrypoint (Cloudflare Flexible SSL or web proxying)
       - "traefik.http.routers.scambaiter-http.rule=Host(`${DOMAIN:-scambaiter.yourdomain.com}`)"
       - "traefik.http.routers.scambaiter-http.entrypoints=web"
       - "traefik.http.routers.scambaiter-http.service=scambaiter"
-      # HTTPS entrypoint (Cloudflare Full / Strict SSL)
       - "traefik.http.routers.scambaiter.rule=Host(`${DOMAIN:-scambaiter.yourdomain.com}`)"
       - "traefik.http.routers.scambaiter.entrypoints=websecure"
       - "traefik.http.routers.scambaiter.tls=true"
       - "traefik.http.routers.scambaiter.tls.certresolver=letsencrypt"
       - "traefik.http.routers.scambaiter.service=scambaiter"
-      # Internal service port
       - "traefik.http.services.scambaiter.loadbalancer.server.port=3000"
-      # Cloudflare real IP & HTTPS protocol forward headers
       - "traefik.http.middlewares.cloudflare-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
       - "traefik.http.middlewares.cloudflare-headers.headers.sslredirect=false"
       - "traefik.http.routers.scambaiter.middlewares=cloudflare-headers"
@@ -60,4 +59,3 @@ networks:
   dokploy-network:
     name: dokploy-network
     external: true
-
