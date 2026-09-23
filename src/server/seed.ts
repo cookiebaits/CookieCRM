@@ -3,43 +3,24 @@ import { PRIMARY_ADMIN_EMAIL } from './auth.ts';
 
 export async function seedInitialData() {
   try {
-    // Wait for Supabase direct PostgreSQL connection to establish and schema to validate
+    // Wait for Supabase PostgreSQL connection to establish and schema to validate
     await waitForDatabaseReady();
 
-    // Clean up legacy demo/test accounts that are no longer needed
-    const obsoleteEmails = [
-      'sbadmin@cookiebaits',
-      'tester@cookiebaits',
-      'admin@cookiebaits',
-      'admin@scambaiter.local',
-      'bt@cookiebaits.local',
-      'test@cookiebaits',
-    ];
-
-    await db.user.deleteMany({
-      where: {
-        email: {
-          in: obsoleteEmails,
-        },
-      },
+    // Ensure PRIMARY_ADMIN_EMAIL has admin privileges
+    const primaryAdmin = await db.user.findFirst({
+      where: { email: PRIMARY_ADMIN_EMAIL },
     });
 
-    // 3. Ensure role hygiene:
-    // Only cookiescambait@gmail.com is an administrator. All other users are standard users.
-    const allUsers = await db.user.findMany();
-    for (const u of allUsers) {
-      const email = u.email.toLowerCase().trim();
-      const targetRole = email === PRIMARY_ADMIN_EMAIL ? 'admin' : 'user';
-      if (u.role !== targetRole) {
-        await db.user.update({
-          where: { id: u.id },
-          data: { role: targetRole },
-        });
-      }
+    if (primaryAdmin && primaryAdmin.role !== 'admin') {
+      await db.user.update({
+        where: { id: primaryAdmin.id },
+        data: { role: 'admin' },
+      });
+      console.log(`[SEED] Granted admin privileges to primary admin (${PRIMARY_ADMIN_EMAIL}).`);
     }
 
-    console.log('[SEED] Initial state synchronized and persistent Supabase database ready.');
+    console.log('[SEED] System initialization complete. Data is persistent.');
   } catch (err) {
-    console.error('[SEED] Error running initialization:', err);
+    console.error('[SEED] Error during initialization:', err);
   }
 }
