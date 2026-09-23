@@ -4,15 +4,10 @@ import {
   Phone,
   Clock,
   Shield,
-  ShieldAlert,
-  AlertTriangle,
   Upload,
   Plus,
   Trash2,
-  Edit2,
   Check,
-  Radio,
-  MessageSquare,
   DollarSign,
   Copy,
   Calendar,
@@ -25,12 +20,19 @@ import {
   FileAudio,
   Eye,
   Edit3,
-  Play,
-  Volume2,
+  FileText,
+  ChevronRight,
+  User as UserIcon,
+  Radio,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
 } from 'lucide-react';
 import { api, getStoredUser } from '../api.ts';
 import { AudioPlayerWidget } from './AudioPlayerWidget.tsx';
-import type { Scammer, PipelineStatus, User, FraudAccount } from '../types.ts';
+import type { Scammer, PipelineStatus, User, FraudAccount, CanonicalStatus } from '../types.ts';
+import { toCanonicalStatus } from '../types.ts';
 
 interface EvidenceMediaItem {
   id: string;
@@ -77,6 +79,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [ipAddress, setIpAddress] = useState(scammer.ipAddress || '');
   const [notes, setNotes] = useState(scammer.notes || '');
 
+  // Active Dossier Notebook Tab (Odoo-style Horizontal Tabs)
+  const [activeTab, setActiveTab] = useState<'notes' | 'assets' | 'evidence' | 'telecom'>('notes');
+
   // Phone Numbers (up to 4) & WhatsApp
   const initialPhones =
     Array.isArray(scammer.phoneNumbers) && scammer.phoneNumbers.length > 0
@@ -113,6 +118,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   };
 
   // Quick Call Logger State (HH:MM:SS & Date Picker)
+  const [showCallLogger, setShowCallLogger] = useState(true);
   const [loggerHours, setLoggerHours] = useState<number>(0);
   const [loggerMins, setLoggerMins] = useState<number>(0);
   const [loggerSecs, setLoggerSecs] = useState<number>(0);
@@ -178,7 +184,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     setPhoneList(updated);
   };
 
-  // Status change handler
+  // Status change handler (Odoo Status Pipeline Chevron)
   const handleStatusChange = async (newStatus: PipelineStatus) => {
     setStatus(newStatus);
     await handleSaveScammerInfo({ status: newStatus });
@@ -298,100 +304,82 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   // Process Evidence & Media File (Image & Audio with 3MB Limit, Admin Exempt)
   const processMediaFile = (file: File) => {
-    const isImage = file.type.startsWith('image/');
-    const isAudio = file.type.startsWith('audio/');
+    const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac)$/i.test(file.name);
+    const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(file.name);
 
-    if (!isImage && !isAudio) {
-      setMediaError('Only image (.png, .jpg, .webp, .gif) and audio (.mp3, .wav, .m4a, .webm) files are supported.');
+    if (!isAudio && !isImage) {
+      setMediaError('Unsupported file type. Please select an image or audio file.');
       return;
     }
 
-    const userEmail = (currentUser?.email || getStoredUser()?.email || '').toLowerCase().trim();
-    const isAdminExempt = userEmail === 'cookiescambait@gmail.com';
-    const maxBytes = 3 * 1024 * 1024; // 3MB
+    const maxBytes = 3 * 1024 * 1024; // 3MB limit
+    const userRole = currentUser?.role || getStoredUser()?.role;
+    const isAdmin = userRole === 'admin' || userRole === 'superadmin';
 
-    if (file.size > maxBytes && !isAdminExempt) {
-      setMediaError(
-        `File "${file.name}" is ${(file.size / (1024 * 1024)).toFixed(
-          1
-        )}MB. Maximum size is 3MB. Admin account cookiescambait@gmail.com is exempt.`
-      );
+    if (file.size > maxBytes && !isAdmin) {
+      setMediaError(`File "${file.name}" exceeds the 3MB size limit.`);
       return;
     }
 
     setMediaError(null);
+
     const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
+    reader.onload = (e) => {
+      const url = e.target?.result as string;
+      if (!url) return;
+
       const newItem: EvidenceMediaItem = {
-        id: crypto.randomUUID(),
+        id: `media_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         name: file.name,
-        url: dataUrl,
+        url,
         type: isImage ? 'image' : 'audio',
-        fileType: file.type,
+        fileType: file.type || (isImage ? 'image/jpeg' : 'audio/mp3'),
         sizeBytes: file.size,
         uploadedAt: new Date().toISOString(),
       };
+
       setEvidenceMedia((prev) => [newItem, ...prev]);
     };
     reader.readAsDataURL(file);
   };
 
-  // Drag & drop handlers for Evidence Media
   const handleMediaDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     setIsDraggingMedia(true);
   };
 
-  const handleMediaDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleMediaDragLeave = () => {
     setIsDraggingMedia(false);
   };
 
   const handleMediaDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     setIsDraggingMedia(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        processMediaFile(files[i]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        processMediaFile(e.dataTransfer.files[i]);
       }
     }
   };
 
-  // Clipboard Paste Handler for Media
   const handleMediaPaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        if (file && (file.type.startsWith('image/') || file.type.startsWith('audio/'))) {
-          e.preventDefault();
-          processMediaFile(file);
-        }
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      for (let i = 0; i < e.clipboardData.files.length; i++) {
+        processMediaFile(e.clipboardData.files[i]);
       }
     }
   };
 
-  // Save renamed media asset
+  const handleDeleteMedia = (id: string) => {
+    setEvidenceMedia((prev) => prev.filter((m) => m.id !== id));
+  };
+
   const handleSaveMediaName = (id: string) => {
     if (!editingMediaName.trim()) return;
     setEvidenceMedia((prev) =>
       prev.map((m) => (m.id === id ? { ...m, name: editingMediaName.trim() } : m))
     );
     setEditingMediaId(null);
-    setEditingMediaName('');
-  };
-
-  // Delete media asset
-  const handleDeleteMedia = (id: string) => {
-    setEvidenceMedia((prev) => prev.filter((m) => m.id !== id));
   };
 
   const copyToClipboard = (text: string) => {
@@ -435,100 +423,98 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     return m === 0 ? `${h}h` : `${h}h ${m}m`;
   };
 
+  // Odoo Canonical Pipeline Stages
+  const ODOO_STAGES: CanonicalStatus[] = [
+    'New / Uncalled',
+    'Currently Baiting',
+    'Top Scams',
+    'Reported / Down',
+  ];
+
+  const currentCanonical = toCanonicalStatus(status);
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col p-2 sm:p-3 gap-2.5 overflow-hidden antialiased">
-      {/* Navigation Top Header Bar */}
-      <header className="bg-slate-900/90 border border-slate-800/90 rounded-xl px-3.5 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-sm text-slate-100 flex flex-col p-2 sm:p-4 gap-3 overflow-hidden antialiased font-sans">
+      {/* ODOO TOP CONTROL BAR: Breadcrumb Navigation + Actions */}
+      <header className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
+        {/* Left Actions & Identity */}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-slate-700/80"
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-slate-700"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Pipeline</span>
+            <span>Pipeline</span>
           </button>
 
-          <div className="h-5 w-px bg-slate-800 hidden sm:block"></div>
+          <div className="h-5 w-px bg-slate-800 hidden sm:block" />
 
+          {/* Quick Flag Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleFlag}
+            title={flagged ? 'Flagged target (Click to unflag)' : 'Click to quick flag target'}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer border ${
+              flagged
+                ? 'bg-rose-600/20 text-rose-400 border-rose-500/40 hover:bg-rose-600/30'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:border-slate-600'
+            }`}
+          >
+            <Flag className={`w-4 h-4 ${flagged ? 'text-rose-400 fill-rose-400' : ''}`} />
+          </button>
+
+          {/* Priority Stars Rating */}
+          <div
+            className="flex items-center gap-0.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-700"
+            title={`Priority Rating: ${priority} of 3. Click to adjust.`}
+          >
+            {[1, 2, 3].map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => {
+                  const newPriority = priority === star ? 0 : star;
+                  setPriority(newPriority);
+                  handleSaveScammerInfo({ priority: newPriority });
+                }}
+                className="text-sm px-0.5 hover:scale-125 transition cursor-pointer"
+              >
+                <span className={star <= priority ? 'text-amber-400 font-bold' : 'text-slate-700'}>
+                  ★
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Name & Alias Horizontal Stack */}
           <div className="flex items-center gap-2">
-            {/* Quick Flag Button */}
-            <button
-              type="button"
-              onClick={handleToggleFlag}
-              title={flagged ? "Flagged target (Click to unflag)" : "Click to quick flag target"}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer border ${
-                flagged
-                  ? 'bg-rose-600/20 text-rose-400 border-rose-500/40 hover:bg-rose-600/30'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:border-slate-600'
-              }`}
-            >
-              <Flag className={`w-4 h-4 ${flagged ? 'text-rose-400 fill-rose-400' : ''}`} />
-            </button>
-
-            {/* Quick Star Priority Rating */}
-            <div
-              className="flex items-center gap-0.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-700"
-              title={`Priority Rating: ${priority} of 3. Click to adjust.`}
-            >
-              {[1, 2, 3].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => {
-                    const newPriority = priority === star ? 0 : star;
-                    setPriority(newPriority);
-                    handleSaveScammerInfo({ priority: newPriority });
-                  }}
-                  className="text-sm px-0.5 hover:scale-125 transition cursor-pointer"
-                >
-                  <span className={star <= priority ? 'text-amber-400 font-bold' : 'text-slate-700'}>
-                    ★
-                  </span>
-                </button>
-              ))}
-            </div>
-
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               onBlur={() => handleSaveScammerInfo()}
-              placeholder="Main Name (e.g. John Son)"
-              className="text-base sm:text-lg font-extrabold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-rose-500 focus:outline-none tracking-tight max-w-[170px] sm:max-w-[220px]"
+              placeholder="Target Full Name"
+              className="text-base sm:text-lg font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-rose-500 focus:outline-none tracking-tight max-w-[180px] sm:max-w-[240px]"
             />
 
-            {/* Input field for Alias right next to Main Name */}
-            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-700">
-              <span className="text-xs font-extrabold text-slate-300 uppercase tracking-wide">Alias:</span>
+            <div className="hidden sm:flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Alias:</span>
               <input
                 type="text"
                 value={alias}
                 onChange={(e) => setAlias(e.target.value)}
                 onBlur={() => handleSaveScammerInfo()}
-                placeholder="e.g. Jaw Shun"
-                className="text-sm font-extrabold text-amber-300 bg-transparent border-b border-slate-600 focus:border-amber-400 focus:outline-none w-28 sm:w-36 font-mono"
+                placeholder="e.g. Willy Fin"
+                className="text-xs font-semibold text-amber-300 bg-transparent border-b border-slate-700 focus:border-amber-400 focus:outline-none w-24 sm:w-32 font-mono"
               />
             </div>
           </div>
         </div>
 
-        {/* Centered Scam Type / Organization Banner over Phone Numbers Column */}
-        <div className="hidden lg:flex items-center justify-center flex-1 px-4">
-          <div className="px-4 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 font-black text-sm tracking-wide shadow-sm flex items-center gap-2">
-            <Building className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>
-              &quot;
-              {organization && scamType
-                ? `${organization} - ${scamType}`
-                : organization || scamType || 'Geek Tech Refund Scam'}
-              &quot;
-            </span>
-          </div>
-        </div>
-
+        {/* Right Actions (Time counter, Share, Delete, Close) */}
         <div className="flex items-center gap-2">
-          {/* Total & Today Time display with Quick Edit (Click, edit, click out to save) */}
+          {/* Quick Edit Total Time Badge */}
           {isEditingTotalTime ? (
             <div className="flex items-center gap-1 bg-slate-900 border-2 border-amber-500 rounded-lg px-2 py-1 shadow-lg animate-fadeIn text-xs font-mono font-bold text-white">
               <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -567,13 +553,15 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             <button
               type="button"
               onClick={handleStartEditingTime}
-              className="flex items-center gap-2 text-xs text-slate-300 bg-slate-950/90 hover:bg-slate-900 hover:border-amber-500/50 px-2.5 py-1 rounded-lg border border-slate-800 font-mono transition cursor-pointer group/time"
+              className="flex items-center gap-2 text-xs text-slate-300 bg-slate-950/90 hover:bg-slate-800 hover:border-amber-500/50 px-2.5 py-1.5 rounded-lg border border-slate-800 font-mono transition cursor-pointer"
               title="Click to quick edit total time wasted"
             >
-              <Clock className="w-3.5 h-3.5 text-emerald-400 group-hover/time:text-amber-400 transition" />
+              <Clock className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-emerald-400 font-bold">{todayMinutes}m Today</span>
               <span className="text-slate-600">|</span>
-              <span className="text-amber-300 font-bold underline decoration-dotted">{totalMinutes}m Total</span>
+              <span className="text-amber-300 font-bold underline decoration-dotted">
+                {totalMinutes}m Total
+              </span>
             </button>
           )}
 
@@ -583,20 +571,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             className="px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-slate-800 text-slate-200 border-slate-700 hover:text-white"
           >
             <Copy className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">{copySuccess ? 'Copied!' : 'Share Link'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleToggleFlag}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border ${
-              flagged
-                ? 'bg-rose-600/20 text-rose-300 border-rose-500/50'
-                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-            }`}
-          >
-            <Flag className={`w-3.5 h-3.5 ${flagged ? 'text-rose-400 fill-rose-400' : ''}`} />
-            <span className="hidden sm:inline">{flagged ? 'Flagged' : 'Flag Target'}</span>
+            <span className="hidden sm:inline">{copySuccess ? 'Copied!' : 'Share'}</span>
           </button>
 
           <button
@@ -607,738 +582,872 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 onClose();
               }
             }}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
             title="Delete Target Case"
           >
             <Trash2 className="w-4 h-4" />
           </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
-      {/* Main Single-Page 3-Column Scroll-less Grid Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 items-stretch">
-        {/* COLUMN 1 (Col Span 3.5): Quick Call Logger, Stats Grid & Call Logs List */}
-        <div className="lg:col-span-4 flex flex-col gap-2 shadow">
-          {/* Box 1: Quick Call Logger (HH:MM:SS + Date Picker + Add Button) */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 space-y-2 shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-rose-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Call Logger
-                </h3>
-              </div>
-              <span className="text-[10px] text-slate-400">Manual Entry</span>
-            </div>
-
-            <form onSubmit={handleQuickLogCall} className="space-y-2 text-xs">
-              <div className="grid grid-cols-3 gap-1.5">
-                {/* HH */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5">Hours (HH)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="24"
-                    value={loggerHours}
-                    onChange={(e) => setLoggerHours(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold text-center"
-                  />
-                </div>
-
-                {/* MM */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5">Mins (MM)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={loggerMins}
-                    onChange={(e) => setLoggerMins(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold text-center"
-                  />
-                </div>
-
-                {/* SS */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5">Secs (SS)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={loggerSecs}
-                    onChange={(e) => setLoggerSecs(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold text-center"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5">
-                {/* Date Picker */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                    Call Date
-                  </label>
-                  <input
-                    type="date"
-                    value={loggerDate}
-                    onChange={(e) => setLoggerDate(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 font-bold cursor-pointer"
-                  />
-                </div>
-
-                {/* Persona */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-0.5">Persona / Notes</label>
-                  <input
-                    type="text"
-                    placeholder="Grandma Gertrude"
-                    value={loggerNotes}
-                    onChange={(e) => setLoggerNotes(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-semibold"
-                  />
-                </div>
-              </div>
-
+      {/* ODOO HORIZONTAL STATUS PROGRESSION CHEVRON RIBBON */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2 overflow-x-auto shadow-sm">
+        <div className="flex items-center gap-1.5 flex-1 min-w-max">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-2 hidden md:inline">
+            Stage:
+          </span>
+          {ODOO_STAGES.map((stg, idx) => {
+            const isActive = currentCanonical === stg;
+            return (
               <button
-                type="submit"
-                className="w-full py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition shadow"
+                key={stg}
+                type="button"
+                onClick={() => handleStatusChange(stg)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer border ${
+                  isActive
+                    ? 'bg-[#714B67] text-white border-[#8f5e82] shadow-md shadow-[#714B67]/30'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+                }`}
               >
-                <Plus className="w-4 h-4" />
-                <span>Log Call Entry</span>
+                <span>{stg}</span>
+                {idx < ODOO_STAGES.length - 1 && (
+                  <ChevronRight className="w-3.5 h-3.5 opacity-40 -mr-1" />
+                )}
               </button>
-            </form>
-          </div>
-
-          {/* Box 2: Stats Grid with Amount Wasted ($) */}
-          <div className="grid grid-cols-4 gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl p-2 shadow text-center">
-            <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
-              <p className="text-[10px] text-slate-300 font-extrabold uppercase">Today</p>
-              <p className="text-sm font-black text-emerald-400 mt-0.5">{formatDurationDisplay(todayMinutes)}</p>
-            </div>
-            <div
-              onClick={handleStartEditingTime}
-              className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-amber-500/50 cursor-pointer transition group"
-              title="Click to quick edit time wasted"
-            >
-              <p className="text-[10px] text-slate-300 font-extrabold uppercase group-hover:text-amber-400 transition">Wasted</p>
-              <p className="text-sm font-black text-amber-300 mt-0.5">{formatDurationDisplay(totalMinutes)}</p>
-            </div>
-            <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
-              <p className="text-[10px] text-slate-300 font-extrabold uppercase">Calls</p>
-              <p className="text-sm font-black text-sky-400 mt-0.5">{totalCallsCount}</p>
-            </div>
-            <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800">
-              <p className="text-[10px] text-slate-300 font-extrabold uppercase">Amt Wasted</p>
-              <p className="text-sm font-black text-rose-400 mt-0.5">${amountWastedDollars.toLocaleString()}</p>
-            </div>
-          </div>
-
-          {/* Box 3: Call Logs List (Moved to Column 1 bottom as per P4) */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col flex-1 shadow min-h-[180px]">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-amber-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Call Logs ({totalCallsCount})
-                </h3>
-              </div>
-            </div>
-
-            <div className="space-y-2 overflow-y-auto max-h-[220px] flex-1 pr-1">
-              {totalCallsCount === 0 ? (
-                <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-[11px] p-3">
-                  No call logs recorded yet. Use the Call Logger above to record call sessions.
-                </div>
-              ) : (
-                scammer.calls.map((call) => (
-                  <div
-                    key={call.id}
-                    className="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1 hover:border-slate-700 transition"
-                  >
-                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold font-mono text-[10px] border border-rose-500/30">
-                          {call.durationMinutes}m
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {new Date(call.date).toLocaleDateString([], {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </span>
-                        {call.victimPersonaUsed && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-800 truncate max-w-[100px]">
-                            {call.victimPersonaUsed}
-                          </span>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCall(call.id)}
-                        className="text-slate-500 hover:text-rose-400 p-0.5"
-                        title="Delete call"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-
-                    {call.notes && (
-                      <p className="text-[11px] text-slate-300 leading-snug">{call.notes}</p>
-                    )}
-
-                    {call.audioRecordingUrl && (
-                      <AudioPlayerWidget
-                        audioUrl={call.audioRecordingUrl}
-                        audioName={call.audioRecordingName}
-                      />
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+            );
+          })}
         </div>
 
-        {/* COLUMN 2 (Col Span 4.5): Phone Numbers, WhatsApp & Case Dossier Profile */}
-        <div className="lg:col-span-4 flex flex-col gap-2.5">
-          {/* Phone Numbers & WhatsApp Intel */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2 shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+        {/* Organization & Scam Category Tag */}
+        <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-lg">
+          <Building className="w-3.5 h-3.5 text-amber-400" />
+          <span>
+            {organization && scamType
+              ? `${organization} • ${scamType}`
+              : organization || scamType || 'Active Target'}
+          </span>
+        </div>
+      </div>
+
+      {/* MAIN WORKSPACE: HORIZONTAL 2-PANE ODOO LAYOUT */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 overflow-hidden min-h-0">
+        {/* LEFT PANE (Col Span 7): The Dossier Sheet with Horizontal Property Grid & Notebook Tabs */}
+        <div className="lg:col-span-7 flex flex-col gap-3 overflow-y-auto pr-1">
+          {/* Section 1: Horizontal 2-Column Key Intelligence Field Matrix */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-3 shadow">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-emerald-400" />
                 <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Phone Numbers &amp; WhatsApp Intel
+                  Target Profile &amp; Intelligence
                 </h3>
               </div>
-              <span className="text-[10px] text-slate-400">4 Phones + 1 WhatsApp</span>
+              <span className="text-[11px] text-slate-400 font-mono">
+                ID: {scammer.id.slice(0, 8)}
+              </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
-              {[0, 1, 2, 3].map((idx) => (
-                <div key={idx}>
-                  <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">
-                    Phone #{idx + 1} {idx === 0 ? '(Primary)' : ''}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {/* Column 1: Telecom & Contact Intel */}
+              <div className="space-y-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    Primary Phone
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="e.g. +1 (800) 555-0100"
+                      value={phoneList[0]}
+                      onChange={(e) => handlePhoneChange(0, e.target.value)}
+                      onBlur={() => handleSaveScammerInfo()}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-emerald-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(phoneList[0])}
+                      className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                      title="Copy phone"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                      <MessageCircle className="w-3 h-3 text-emerald-400" />
+                      WhatsApp
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. +1 800 555 9988"
+                      value={whatsappNumber}
+                      onChange={(e) => setWhatsappNumber(e.target.value)}
+                      onBlur={() => handleSaveScammerInfo()}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-300 font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Carrier / VoIP
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. TextNow, Bandwidth"
+                      value={carrier}
+                      onChange={(e) => setCarrier(e.target.value)}
+                      onBlur={() => handleSaveScammerInfo()}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-slate-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Location / Region
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Kolkata, New Delhi"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      onBlur={() => handleSaveScammerInfo()}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-slate-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Remote Access ID
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="AnyDesk or UltraViewer"
+                      value={remoteAccessId}
+                      onChange={(e) => setRemoteAccessId(e.target.value)}
+                      onBlur={() => handleSaveScammerInfo()}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-slate-600"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 2: Scam Classification & Financial Metrics */}
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Scam Type
+                    </label>
+                    <select
+                      value={scamType}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setScamType(val);
+                        handleSaveScammerInfo({ scamType: val });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-amber-300 font-semibold focus:outline-none focus:border-amber-400"
+                    >
+                      <option value="Crypto Investment">Crypto Investment</option>
+                      <option value="IRS / Govt">IRS / Govt</option>
+                      <option value="Lotto / Sweepstakes">Lotto / Sweepstakes</option>
+                      <option value="Other">Other</option>
+                      <option value="Spellcaster / Pet">Spellcaster / Pet</option>
+                      <option value="Tech / Refund">Tech / Refund</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Threat Level
+                    </label>
+                    <select
+                      value={dangerLevel}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setDangerLevel(val);
+                        handleSaveScammerInfo({ dangerLevel: val });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-slate-600"
+                    >
+                      <option value="low">Low Risk</option>
+                      <option value="medium">Medium Risk</option>
+                      <option value="high">High Threat</option>
+                      <option value="critical">Critical Threat</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Fake Company / Org
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Geek Squad, Decoverse"
+                      value={organization}
+                      onChange={(e) => setOrganization(e.target.value)}
+                      onBlur={() => handleSaveScammerInfo()}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-slate-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Loss Prevented ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      placeholder="0"
+                      value={targetValue}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) || 0;
+                        setTargetValue(val);
+                        handleSaveScammerInfo({ targetValue: val });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    Logged Scammer IP
                   </label>
                   <input
                     type="text"
-                    placeholder={`e.g. +1 (800) 555-010${idx + 1}`}
-                    value={phoneList[idx]}
-                    onChange={(e) => handlePhoneChange(idx, e.target.value)}
+                    placeholder="Grabify or connection IP"
+                    value={ipAddress}
+                    onChange={(e) => setIpAddress(e.target.value)}
                     onBlur={() => handleSaveScammerInfo()}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono focus:ring-1 focus:ring-emerald-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-slate-600"
                   />
                 </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-1.5">
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5 flex items-center gap-1">
-                  <MessageCircle className="w-3 h-3 text-emerald-400" />
-                  WhatsApp
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. +1 800 555 9988"
-                  value={whatsappNumber}
-                  onChange={(e) => setWhatsappNumber(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-300 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Carrier / VoIP</label>
-                <input
-                  type="text"
-                  placeholder="e.g. TextNow"
-                  value={carrier}
-                  onChange={(e) => setCarrier(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Location</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Kolkata"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                />
               </div>
             </div>
           </div>
 
-          {/* Case Profile & Dossier Details */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col flex-1 space-y-2 shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-amber-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Case Profile &amp; Details
-                </h3>
-              </div>
+          {/* Section 2: Odoo Horizontal Notebook Tabs (Notes, Receiver Assets, Evidence, Telecom) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col flex-1 shadow overflow-hidden">
+            {/* Tab Strip */}
+            <div className="flex items-center gap-1 bg-slate-950 px-3 pt-2 border-b border-slate-800 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setActiveTab('notes')}
+                className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition flex items-center gap-1.5 border-t border-x ${
+                  activeTab === 'notes'
+                    ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
+                    : 'text-slate-400 border-transparent hover:text-slate-200'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-400" />
+                <span>Operations Notes</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('assets')}
+                className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition flex items-center gap-1.5 border-t border-x ${
+                  activeTab === 'assets'
+                    ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
+                    : 'text-slate-400 border-transparent hover:text-slate-200'
+                }`}
+              >
+                <DollarSign className="w-3.5 h-3.5 text-rose-400" />
+                <span>Receiver Assets ({scammer.fraudAccounts.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('evidence')}
+                className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition flex items-center gap-1.5 border-t border-x ${
+                  activeTab === 'evidence'
+                    ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
+                    : 'text-slate-400 border-transparent hover:text-slate-200'
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
+                <span>Evidence Vault ({evidenceMedia.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('telecom')}
+                className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition flex items-center gap-1.5 border-t border-x ${
+                  activeTab === 'telecom'
+                    ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
+                    : 'text-slate-400 border-transparent hover:text-slate-200'
+                }`}
+              >
+                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>All Phone Numbers</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Pipeline Stage</label>
-                <select
-                  value={status}
-                  onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-semibold"
-                >
-                  <option value="New / Uncalled">1. New / Uncalled</option>
-                  <option value="Currently Baiting">2. Currently Baiting</option>
-                  <option value="Top Scams">3. Top Scams</option>
-                  <option value="Reported / Down">4. Reported / Down</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Target Deal / Fraud ($)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={targetValue}
-                  onChange={(e) => {
-                    const val = Number(e.target.value) || 0;
-                    setTargetValue(val);
-                    handleSaveScammerInfo({ targetValue: val });
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-400 font-mono font-bold"
-                  placeholder="e.g. 4500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Scam Type</label>
-                <select
-                  value={scamType}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setScamType(val);
-                    handleSaveScammerInfo({ scamType: val });
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-amber-300"
-                >
-                  <option value="Crypto Investment">Crypto Investment</option>
-                  <option value="IRS / Govt">IRS / Govt</option>
-                  <option value="Lotto / Sweepstakes">Lotto / Sweepstakes</option>
-                  <option value="Other">Other</option>
-                  <option value="Spellcaster / Pet">Spellcaster / Pet</option>
-                  <option value="Tech / Refund">Tech / Refund</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Fake Organization</label>
-                <input
-                  type="text"
-                  value={organization}
-                  onChange={(e) => setOrganization(e.target.value)}
+            {/* Tab 1: Operations Notes */}
+            {activeTab === 'notes' && (
+              <div className="p-3.5 flex flex-col flex-1 space-y-2">
+                <div className="flex items-center justify-between text-slate-400 text-xs">
+                  <span>General Dossier &amp; Behavioral Notes:</span>
+                  <span className="text-[10px]">Autosaved on blur</span>
+                </div>
+                <textarea
+                  rows={6}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
                   onBlur={() => handleSaveScammerInfo()}
-                  placeholder="e.g. Geek Squad"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                  placeholder="Behavioral traits, accents, background call-center sounds, fake details and credit cards fed during bait sessions..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-100 flex-1 min-h-[140px] leading-relaxed focus:outline-none focus:border-slate-700"
                 />
               </div>
+            )}
 
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Priority Rating</label>
-                <div className="flex items-center gap-1 h-6 px-2 bg-slate-950 border border-slate-800 rounded-lg">
-                  {[1, 2, 3].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => {
-                        const newPriority = priority === star ? 0 : star;
-                        setPriority(newPriority);
-                        handleSaveScammerInfo({ priority: newPriority });
-                      }}
-                      className="text-xs transition hover:scale-125 cursor-pointer"
-                    >
-                      <span className={star <= priority ? 'text-amber-400' : 'text-slate-700'}>★</span>
-                    </button>
+            {/* Tab 2: Receiver Assets */}
+            {activeTab === 'assets' && (
+              <div className="p-3.5 space-y-3 flex-1 flex flex-col">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-300 font-semibold">
+                    Reported Accounts, Crypto Wallets &amp; Money Mules
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddFraud(!showAddFraud)}
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{showAddFraud ? 'Cancel' : 'Add Asset'}</span>
+                  </button>
+                </div>
+
+                {showAddFraud && (
+                  <form
+                    onSubmit={handleAddFraudAccount}
+                    className="bg-slate-950 border border-rose-500/40 rounded-xl p-3 space-y-2 text-xs animate-fadeIn"
+                  >
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-0.5">Asset Type</label>
+                        <select
+                          value={fraudType}
+                          onChange={(e) => setFraudType(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                        >
+                          <option value="bank_account">Bank Account</option>
+                          <option value="crypto_wallet">Crypto Wallet</option>
+                          <option value="zelle">Zelle Recipient</option>
+                          <option value="wire">Wire Transfer</option>
+                          <option value="phone_website">Phone Number / Website</option>
+                          <option value="whatsapp">WhatsApp Contact</option>
+                          <option value="paypal">PayPal / CashApp</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-0.5">
+                          Details (Account / Address / ID)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Chase 12345678 or bc1q..."
+                          value={fraudDetails}
+                          onChange={(e) => setFraudDetails(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-0.5">Bank / Institution</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. JPMorgan Chase"
+                          value={fraudInstitution}
+                          onChange={(e) => setFraudInstitution(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-0.5">Account Holder Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Money Mule"
+                          value={fraudHolder}
+                          onChange={(e) => setFraudHolder(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddFraud(false)}
+                        className="px-2.5 py-1 text-xs text-slate-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded transition"
+                      >
+                        Save Asset
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="space-y-2 overflow-y-auto max-h-[220px]">
+                  {scammer.fraudAccounts.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs p-3">
+                      No receiver assets logged yet. Click &quot;Add Asset&quot; to register illicit accounts.
+                    </div>
+                  ) : (
+                    scammer.fraudAccounts.map((acc) => (
+                      <div
+                        key={acc.id}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between gap-3 hover:border-slate-700 transition"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              {formatAccountTypeLabel(acc.accountType)}
+                            </span>
+                            {acc.institution && (
+                              <span className="text-xs text-slate-200 font-semibold truncate">
+                                {acc.institution}
+                              </span>
+                            )}
+                            {acc.holderName && (
+                              <span className="text-[11px] text-slate-400">({acc.holderName})</span>
+                            )}
+                          </div>
+                          <p className="text-xs font-mono text-slate-100 truncate">{acc.accountDetails}</p>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(acc.accountDetails)}
+                            className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white"
+                            title="Copy details"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFraudAccount(acc.id)}
+                            className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Evidence Vault */}
+            {activeTab === 'evidence' && (
+              <div className="p-3.5 space-y-3 flex-1 flex flex-col">
+                {/* Drag, Drop & Paste Zone */}
+                <div
+                  onDragOver={handleMediaDragOver}
+                  onDragLeave={handleMediaDragLeave}
+                  onDrop={handleMediaDrop}
+                  onPaste={handleMediaPaste}
+                  tabIndex={0}
+                  className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition focus:outline-none ${
+                    isDraggingMedia
+                      ? 'border-sky-500 bg-sky-500/10'
+                      : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+                  }`}
+                  onClick={() => {
+                    const el = document.getElementById('evidence-media-input');
+                    if (el) el.click();
+                  }}
+                >
+                  <input
+                    type="file"
+                    id="evidence-media-input"
+                    accept="image/*,audio/*"
+                    multiple
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files) {
+                        for (let i = 0; i < files.length; i++) {
+                          processMediaFile(files[i]);
+                        }
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1 pointer-events-none">
+                    <Upload className="w-4 h-4 text-sky-400" />
+                    <p className="text-xs font-semibold text-slate-200">
+                      Drag &amp; drop images/audio, click to browse, or paste (Ctrl+V)
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      Images (.png, .jpg) &amp; Audio (.mp3, .wav) • Limit 3MB
+                    </p>
+                  </div>
+                </div>
+
+                {mediaError && (
+                  <div className="p-2 rounded bg-rose-950/60 border border-rose-800 text-xs text-rose-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <span>{mediaError}</span>
+                  </div>
+                )}
+
+                {/* Evidence List */}
+                <div className="space-y-2 overflow-y-auto max-h-[220px]">
+                  {evidenceMedia.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs p-3">
+                      No evidence or media files uploaded yet. Drag &amp; drop or paste files above.
+                    </div>
+                  ) : (
+                    evidenceMedia.map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-2 hover:border-slate-700 transition"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {item.type === 'image' ? (
+                              <ImageIcon className="w-4 h-4 text-sky-400 shrink-0" />
+                            ) : (
+                              <FileAudio className="w-4 h-4 text-rose-400 shrink-0" />
+                            )}
+
+                            {editingMediaId === item.id ? (
+                              <div className="flex items-center gap-1 flex-1">
+                                <input
+                                  type="text"
+                                  value={editingMediaName}
+                                  onChange={(e) => setEditingMediaName(e.target.value)}
+                                  className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white w-full"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveMediaName(item.id)}
+                                  className="p-1 rounded bg-emerald-600 text-white text-[10px]"
+                                >
+                                  <Check className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span
+                                className="text-xs font-semibold text-slate-100 truncate cursor-pointer hover:text-sky-300"
+                                onClick={() => {
+                                  if (item.type === 'image') setPreviewImage(item.url);
+                                }}
+                              >
+                                {item.name}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {(item.sizeBytes / 1024).toFixed(0)}KB
+                            </span>
+
+                            {item.type === 'image' && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewImage(item.url)}
+                                className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
+                                title="Preview full size"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMediaId(item.id);
+                                setEditingMediaName(item.name);
+                              }}
+                              className="p-1 rounded bg-slate-800 text-slate-400 hover:text-amber-300"
+                              title="Rename file"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMedia(item.id)}
+                              className="p-1 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
+                              title="Delete file"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {item.type === 'image' ? (
+                          <div
+                            className="w-full h-20 bg-slate-900 rounded overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-sky-500/50 transition"
+                            onClick={() => setPreviewImage(item.url)}
+                          >
+                            <img
+                              src={item.url}
+                              alt={item.name}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="bg-slate-900 rounded p-1.5 border border-slate-800">
+                            <audio controls src={item.url} className="w-full h-8" />
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 4: Telecom & All 4 Phone Numbers */}
+            {activeTab === 'telecom' && (
+              <div className="p-3.5 space-y-3 flex-1 flex flex-col">
+                <span className="text-xs text-slate-300 font-semibold">
+                  Telephone Routing &amp; Direct Dials (Up to 4 Numbers)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {[0, 1, 2, 3].map((idx) => (
+                    <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        Phone #{idx + 1} {idx === 0 ? '(Primary Direct)' : ''}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={`e.g. +1 (800) 555-010${idx + 1}`}
+                        value={phoneList[idx]}
+                        onChange={(e) => handlePhoneChange(idx, e.target.value)}
+                        onBlur={() => handleSaveScammerInfo()}
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white font-mono focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
                   ))}
                 </div>
               </div>
-
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Scam Threat Level</label>
-                <select
-                  value={dangerLevel}
-                  onChange={(e) => {
-                    const val = e.target.value as any;
-                    setDangerLevel(val);
-                    handleSaveScammerInfo({ dangerLevel: val });
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
-                >
-                  <option value="low">Low Risk</option>
-                  <option value="medium">Medium Risk</option>
-                  <option value="high">High Threat</option>
-                  <option value="critical">Critical Threat</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Remote Access ID</label>
-                <input
-                  type="text"
-                  value={remoteAccessId}
-                  onChange={(e) => setRemoteAccessId(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  placeholder="AnyDesk or UltraViewer"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">Logged Scammer IP</label>
-                <input
-                  type="text"
-                  value={ipAddress}
-                  onChange={(e) => setIpAddress(e.target.value)}
-                  onBlur={() => handleSaveScammerInfo()}
-                  placeholder="Grabify or connection IP"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
-                />
-              </div>
-            </div>
-
-            {/* General Notes */}
-            <div className="flex-1 flex flex-col">
-              <label className="block text-[9px] font-semibold text-slate-400 mb-0.5">
-                General Operations Notes
-              </label>
-              <textarea
-                rows={2}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={() => handleSaveScammerInfo()}
-                placeholder="Behavioral traits, background noise, fake data fed during bait..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white flex-1 min-h-[45px] leading-relaxed"
-              />
-            </div>
+            )}
           </div>
         </div>
 
-        {/* COLUMN 3 (Col Span 4): Receiver Assets & Evidence & Media */}
-        <div className="lg:col-span-4 flex flex-col gap-2.5">
-          {/* Receiver Assets / Reported Assets (Moved to Column 3 as per P4) */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
-              <div className="flex items-center gap-1.5">
-                <DollarSign className="w-3.5 h-3.5 text-rose-400" />
+        {/* RIGHT PANE (Col Span 5): ODOO EFFORTLESS COMMUNICATION & CHATTER STREAM */}
+        <div className="lg:col-span-5 flex flex-col gap-3 overflow-hidden">
+          {/* Chatter Container */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col flex-1 shadow overflow-hidden">
+            {/* Chatter Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-2.5">
+              <div className="flex items-center gap-2">
+                <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
                 <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Receiver Assets ({scammer.fraudAccounts.length})
+                  Effortless Communication ({totalCallsCount})
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAddFraud(!showAddFraud)}
-                className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold flex items-center gap-1 transition shadow"
-              >
-                <Plus className="w-3 h-3" />
-                {showAddFraud ? 'Close' : 'Add Asset'}
-              </button>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowCallLogger(!showCallLogger)}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1 transition shadow"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Log Call</span>
+                </button>
+              </div>
             </div>
 
-            {showAddFraud && (
-              <form
-                onSubmit={handleAddFraudAccount}
-                className="bg-slate-950 border border-rose-500/40 rounded-xl p-2 mb-2 space-y-1.5 text-xs"
+            {/* Horizontal Communication Stats Bar */}
+            <div className="grid grid-cols-4 gap-2 bg-slate-950 border border-slate-800 rounded-lg p-2 mb-3 text-center">
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Today</p>
+                <p className="text-xs font-black text-emerald-400 mt-0.5">
+                  {formatDurationDisplay(todayMinutes)}
+                </p>
+              </div>
+              <div
+                onClick={handleStartEditingTime}
+                className="cursor-pointer hover:bg-slate-900 rounded transition"
+                title="Click to quick edit time wasted"
               >
-                <div>
-                  <label className="block text-[9px] font-medium text-slate-300 mb-0.5">Asset Type</label>
-                  <select
-                    value={fraudType}
-                    onChange={(e) => setFraudType(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
-                  >
-                    <option value="bank_account">Bank Account</option>
-                    <option value="crypto_wallet">Crypto Wallet</option>
-                    <option value="zelle">Zelle Recipient</option>
-                    <option value="wire">Wire Transfer</option>
-                    <option value="phone_website">Phone Number / Website</option>
-                    <option value="whatsapp">WhatsApp Contact</option>
-                    <option value="paypal">PayPal / CashApp</option>
-                  </select>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Total Wasted</p>
+                <p className="text-xs font-black text-amber-300 mt-0.5 underline decoration-dotted">
+                  {formatDurationDisplay(totalMinutes)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Sessions</p>
+                <p className="text-xs font-black text-sky-400 mt-0.5">{totalCallsCount}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Loss Prevented</p>
+                <p className="text-xs font-black text-rose-400 mt-0.5">
+                  ${amountWastedDollars.toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            {/* Compact Call Logger Tray */}
+            {showCallLogger && (
+              <form
+                onSubmit={handleQuickLogCall}
+                className="bg-slate-950 border border-rose-500/30 rounded-xl p-2.5 mb-3 space-y-2 text-xs animate-fadeIn"
+              >
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Hours</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="24"
+                      value={loggerHours}
+                      onChange={(e) => setLoggerHours(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono font-bold text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Mins</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={loggerMins}
+                      onChange={(e) => setLoggerMins(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono font-bold text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Secs</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={loggerSecs}
+                      onChange={(e) => setLoggerSecs(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono font-bold text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Date</label>
+                    <input
+                      type="date"
+                      value={loggerDate}
+                      onChange={(e) => setLoggerDate(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] text-white font-semibold cursor-pointer"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[9px] font-medium text-slate-300 mb-0.5">Details (Account / Phone / URL)</label>
+                <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. +1 (800) 555-0199 or Chase 12345678"
-                    value={fraudDetails}
-                    onChange={(e) => setFraudDetails(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white font-mono"
+                    placeholder="Persona or notes (e.g. Grandma Gertrude, refund denied...)"
+                    value={loggerNotes}
+                    onChange={(e) => setLoggerNotes(e.target.value)}
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-rose-500"
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div>
-                    <label className="block text-[9px] font-medium text-slate-300 mb-0.5">Institution</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Chase Bank"
-                      value={fraudInstitution}
-                      onChange={(e) => setFraudInstitution(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-medium text-slate-300 mb-0.5">Holder</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Money Mule"
-                      value={fraudHolder}
-                      onChange={(e) => setFraudHolder(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-1.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddFraud(false)}
-                    className="px-2 py-1 text-[11px] text-slate-400 hover:text-white"
-                  >
-                    Cancel
-                  </button>
                   <button
                     type="submit"
-                    className="px-3 py-1 text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded transition"
+                    className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shrink-0 transition"
                   >
-                    Save Asset
+                    Log Entry
                   </button>
                 </div>
               </form>
             )}
 
-            <div className="space-y-1.5 overflow-y-auto max-h-[160px] flex-1 pr-1">
-              {scammer.fraudAccounts.length === 0 ? (
-                <div className="text-center py-4 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-[11px] p-2">
-                  No receiver assets logged yet. Click &quot;Add Asset&quot; to record bank accounts, wallets, or phone numbers.
+            {/* Chronological Chatter Stream (Odoo Effortless Communication Style) */}
+            <div className="space-y-2 overflow-y-auto flex-1 pr-1">
+              {totalCallsCount === 0 ? (
+                <div className="text-center py-10 bg-slate-950/50 rounded-xl border border-slate-800 text-slate-400 text-xs p-4 flex flex-col items-center justify-center gap-2">
+                  <Phone className="w-6 h-6 text-slate-600" />
+                  <p>No communication records yet.</p>
+                  <p className="text-[11px] text-slate-500">
+                    Use the &quot;Log Call&quot; tray above to track conversations and recordings.
+                  </p>
                 </div>
               ) : (
-                scammer.fraudAccounts.map((acc) => (
+                scammer.calls.map((call) => (
                   <div
-                    key={acc.id}
-                    className="bg-slate-950 border border-slate-800 rounded-lg p-2 flex items-center justify-between gap-2"
+                    key={call.id}
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 hover:border-slate-700 transition shadow-sm"
                   >
-                    <div className="min-w-0 space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                          {formatAccountTypeLabel(acc.accountType)}
+                    {/* Entry Header */}
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold text-[10px]">
+                          📞
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold font-mono text-xs border border-rose-500/30">
+                          {call.durationMinutes}m duration
                         </span>
-                        {acc.institution && (
-                          <span className="text-[11px] text-slate-300 font-semibold truncate">
-                            {acc.institution}
-                          </span>
-                        )}
+                        <span className="text-xs text-slate-400">
+                          {new Date(call.date).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </span>
                       </div>
-                      <p className="text-[11px] font-mono text-slate-100 truncate">{acc.accountDetails}</p>
-                    </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(acc.accountDetails)}
-                        className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
-                        title="Copy"
+                        onClick={() => handleDeleteCall(call.id)}
+                        className="text-slate-500 hover:text-rose-400 p-1 transition"
+                        title="Delete record"
                       >
-                        <Copy className="w-3 h-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteFraudAccount(acc.id)}
-                        className="p-1 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
 
-          {/* Evidence & Media Section (P5: Drag/drop, Click/search, Paste, 3MB limit, List view with rename & player) */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col flex-1 shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
-              <div className="flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Evidence &amp; Media ({evidenceMedia.length})
-                </h3>
-              </div>
-              <span className="text-[10px] text-slate-400">Max 3MB per file</span>
-            </div>
-
-            {/* Drag, Drop & Paste Zone */}
-            <div
-              onDragOver={handleMediaDragOver}
-              onDragLeave={handleMediaDragLeave}
-              onDrop={handleMediaDrop}
-              onPaste={handleMediaPaste}
-              tabIndex={0}
-              className={`border-2 border-dashed rounded-xl p-2.5 text-center cursor-pointer transition focus:outline-none mb-2 ${
-                isDraggingMedia
-                  ? 'border-sky-500 bg-sky-500/10'
-                  : 'border-slate-800 bg-slate-950 hover:border-slate-700'
-              }`}
-              onClick={() => {
-                const el = document.getElementById('evidence-media-input');
-                if (el) el.click();
-              }}
-            >
-              <input
-                type="file"
-                id="evidence-media-input"
-                accept="image/*,audio/*"
-                multiple
-                onChange={(e) => {
-                  const files = e.target.files;
-                  if (files) {
-                    for (let i = 0; i < files.length; i++) {
-                      processMediaFile(files[i]);
-                    }
-                  }
-                }}
-                className="hidden"
-              />
-              <div className="flex flex-col items-center justify-center gap-1 pointer-events-none">
-                <Upload className="w-4 h-4 text-sky-400" />
-                <p className="text-[11px] font-medium text-slate-200">
-                  Drag &amp; drop images/audio, click to browse, or paste (Ctrl+V)
-                </p>
-                <p className="text-[9px] text-slate-400">Images (.png, .jpg) &amp; Audio (.mp3, .wav) • Limit 3MB</p>
-              </div>
-            </div>
-
-            {mediaError && (
-              <div className="mb-2 p-1.5 rounded bg-rose-950/60 border border-rose-800 text-[10px] text-rose-300 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                <span>{mediaError}</span>
-              </div>
-            )}
-
-            {/* Evidence & Media List */}
-            <div className="space-y-1.5 overflow-y-auto max-h-[220px] flex-1 pr-1">
-              {evidenceMedia.length === 0 ? (
-                <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-[11px] p-2">
-                  No evidence or media files uploaded yet. Drag &amp; drop or paste files above.
-                </div>
-              ) : (
-                evidenceMedia.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1.5 hover:border-slate-700 transition"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        {item.type === 'image' ? (
-                          <ImageIcon className="w-4 h-4 text-sky-400 shrink-0" />
-                        ) : (
-                          <FileAudio className="w-4 h-4 text-rose-400 shrink-0" />
-                        )}
-
-                        {editingMediaId === item.id ? (
-                          <div className="flex items-center gap-1 flex-1">
-                            <input
-                              type="text"
-                              value={editingMediaName}
-                              onChange={(e) => setEditingMediaName(e.target.value)}
-                              className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-white w-full"
-                              autoFocus
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleSaveMediaName(item.id)}
-                              className="p-1 rounded bg-emerald-600 text-white text-[10px]"
-                            >
-                              <Check className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <span
-                            className="text-xs font-semibold text-slate-100 truncate cursor-pointer hover:text-sky-300"
-                            onClick={() => {
-                              if (item.type === 'image') setPreviewImage(item.url);
-                            }}
-                          >
-                            {item.name}
-                          </span>
-                        )}
+                    {/* Victim Persona & Notes */}
+                    {call.victimPersonaUsed && (
+                      <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold">
+                        <UserIcon className="w-3 h-3" />
+                        <span>Persona: {call.victimPersonaUsed}</span>
                       </div>
+                    )}
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[9px] text-slate-400 font-mono">
-                          {(item.sizeBytes / 1024).toFixed(0)}KB
-                        </span>
+                    {call.notes && (
+                      <p className="text-xs text-slate-200 leading-relaxed bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                        {call.notes}
+                      </p>
+                    )}
 
-                        {item.type === 'image' && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewImage(item.url)}
-                            className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
-                            title="View full image"
-                          >
-                            <Eye className="w-3 h-3" />
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingMediaId(item.id);
-                            setEditingMediaName(item.name);
-                          }}
-                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-amber-300"
-                          title="Rename asset"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteMedia(item.id)}
-                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
-                          title="Delete asset"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Media Inline Preview or Audio Player */}
-                    {item.type === 'image' ? (
-                      <div
-                        className="w-full h-16 bg-slate-900 rounded overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-sky-500/50 transition"
-                        onClick={() => setPreviewImage(item.url)}
-                      >
-                        <img
-                          src={item.url}
-                          alt={item.name}
-                          className="h-full w-full object-cover"
+                    {/* Audio Recording */}
+                    {call.audioRecordingUrl && (
+                      <div className="pt-1">
+                        <AudioPlayerWidget
+                          audioUrl={call.audioRecordingUrl}
+                          audioName={call.audioRecordingName}
                         />
-                      </div>
-                    ) : (
-                      <div className="bg-slate-900 rounded p-1.5 border border-slate-800">
-                        <audio controls src={item.url} className="w-full h-8" />
                       </div>
                     )}
                   </div>
@@ -1349,7 +1458,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         </div>
       </div>
 
-      {/* Image Full Size Modal Preview */}
+      {/* Full Size Image Preview Modal */}
       {previewImage && (
         <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-fadeIn"
@@ -1359,7 +1468,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             <button
               type="button"
               onClick={() => setPreviewImage(null)}
-              className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-white hover:bg-rose-600 transition z-10"
+              className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-white hover:bg-rose-600 transition z-10 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
