@@ -15,70 +15,7 @@
       "updatedAt": "2026-09-22T06:48:40.020Z"
     }
   ],
-  "scammers": [
-    {
-      "id": "1dce2cb1-c436-4278-8792-228b4d4709eb",
-      "fullName": "+1 (800) 419-7221",
-      "alias": "Geek Tech Refund Scam",
-      "phoneNumber": "+1 (800) 419-7221",
-      "phoneNumbers": [
-        "+1 (800) 419-7221",
-        "+1 (888) 321-9900",
-        "+1 (800) 555-0199"
-      ],
-      "whatsappNumber": "+1 (800) 419-7221",
-      "status": "New",
-      "carrier": "TextNow VoIP",
-      "location": "Kolkata, IN",
-      "scamType": "Tech Support",
-      "organization": "Geek Squad Support Inc",
-      "flagged": false,
-      "dangerLevel": "medium",
-      "victimGivenInfo": null,
-      "remoteAccessId": null,
-      "ipAddress": null,
-      "notes": "Target claims to be Apple & Geek Squad support asking for AnyDesk remote access.",
-      "totalTimeSpent": 0,
-      "targetValue": 4500,
-      "priority": 3,
-      "createdAt": "2026-09-22T06:12:24.305Z",
-      "updatedAt": "2026-09-22T06:12:24.305Z",
-      "userId": "7d9d57ad-335b-4a97-92d0-e6f6cf785324",
-      "calls": [],
-      "fraudAccounts": []
-    },
-    {
-      "id": "b358664c-d746-447a-95b4-f77e41cf3803",
-      "fullName": "+1 (800) 419-7221",
-      "alias": "Geek Tech Refund Scam",
-      "phoneNumber": "+1 (800) 419-7221",
-      "phoneNumbers": [
-        "+1 (800) 419-7221",
-        "+1 (888) 321-9900",
-        "+1 (800) 555-0199"
-      ],
-      "whatsappNumber": "+1 (800) 419-7221",
-      "status": "New / Uncalled",
-      "carrier": "TextNow VoIP",
-      "location": "Kolkata, IN",
-      "scamType": "Tech Support",
-      "organization": "Geek Squad Support Inc",
-      "flagged": false,
-      "dangerLevel": "medium",
-      "victimGivenInfo": null,
-      "remoteAccessId": null,
-      "ipAddress": null,
-      "notes": "Target claims to be Apple & Geek Squad support asking for AnyDesk remote access.",
-      "totalTimeSpent": 0,
-      "targetValue": 4500,
-      "priority": 3,
-      "createdAt": "2026-09-22T06:14:11.747Z",
-      "updatedAt": "2026-09-22T06:14:11.747Z",
-      "userId": "7d9d57ad-335b-4a97-92d0-e6f6cf785324",
-      "calls": [],
-      "fraudAccounts": []
-    }
-  ],
+  "scammers": [],
   "callLogs": [],
   "fraudAccounts": []
 }
