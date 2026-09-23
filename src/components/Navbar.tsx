@@ -48,9 +48,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-6">
           <button
             type="button"
-            onClick={() => onChangeView('pipeline')}
+            onClick={() => {
+              onChangeView('pipeline');
+              onSearchChange('');
+            }}
             className="flex items-center hover:opacity-95 transition focus:outline-none cursor-pointer relative z-20"
-            title="Scambaiter CRM Intelligence"
+            title="Scambaiter CRM Intelligence - Return to Dashboard"
           >
             <img
               src="/logo.png"

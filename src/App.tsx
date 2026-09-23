@@ -398,7 +398,10 @@ export default function App() {
       <Navbar
         user={user}
         activeView={activeView}
-        onChangeView={setActiveView}
+        onChangeView={(view) => {
+          setActiveView(view);
+          setSelectedScammer(null);
+        }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         flaggedOnly={flaggedOnly}
