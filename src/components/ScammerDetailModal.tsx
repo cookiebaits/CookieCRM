@@ -212,6 +212,25 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Helper to check audio file duration
+  const getAudioDuration = (file: File): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      audio.preload = 'metadata';
+      const objectUrl = URL.createObjectURL(file);
+      audio.src = objectUrl;
+      audio.onloadedmetadata = () => {
+        const dur = audio.duration;
+        URL.revokeObjectURL(objectUrl);
+        resolve(dur);
+      };
+      audio.onerror = (err) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(err);
+      };
+    });
+  };
+
   // Save changes to scammer
   const handleSaveScammerInfo = async (fieldOverrides: Partial<Scammer> = {}) => {
     try {
@@ -241,7 +260,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       const res = await api.updateScammer(scammer.id, payload);
       onUpdateScammer(res.scammer);
     } catch (err) {
-      console.error('Save scammer error:', err);
+      console.error('[ScammerDetailModal] Save scammer error:', err);
     }
   };
 
@@ -299,7 +318,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       setLoggerPersona('');
       setLoggerDate(new Date().toISOString().split('T')[0]);
     } catch (err) {
-      console.error('Quick call log error:', err);
+      console.error('[ScammerDetailModal] Quick call log error:', err);
     }
   };
 
@@ -322,7 +341,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         todayTimeSpent: todayMinutes,
       });
     } catch (err) {
-      console.error('Delete call error:', err);
+      console.error('[ScammerDetailModal] Delete call error:', err);
     }
   };
 
@@ -351,7 +370,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       setFraudInstitution('');
       setFraudHolder('');
     } catch (err) {
-      console.error('Add fraud account error:', err);
+      console.error('[ScammerDetailModal] Add fraud account error:', err);
     }
   };
 
@@ -365,12 +384,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         fraudAccounts: updated,
       });
     } catch (err) {
-      console.error('Delete fraud account error:', err);
+      console.error('[ScammerDetailModal] Delete fraud account error:', err);
     }
   };
 
-  // Process Evidence & Media File (Image & Audio with 3MB Limit, Admin Exempt)
-  const processMediaFile = (file: File) => {
+  // Process Evidence & Media File (Image & Audio with 3MB Limit, 90s Audio Limit, Admin cookiescambait@gmail.com Exempt)
+  const processMediaFile = async (file: File) => {
     const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac)$/i.test(file.name);
     const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(file.name);
 
@@ -380,12 +399,25 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     }
 
     const maxBytes = 3 * 1024 * 1024; // 3MB limit
-    const userRole = currentUser?.role || getStoredUser()?.role;
-    const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+    const userEmail = currentUser?.email || getStoredUser()?.email;
+    const isExempt = userEmail?.toLowerCase().trim() === 'cookiescambait@gmail.com';
 
-    if (file.size > maxBytes && !isAdmin) {
+    if (file.size > maxBytes && !isExempt) {
       setMediaError(`File "${file.name}" exceeds the 3MB size limit.`);
       return;
+    }
+
+    // Call audio recordings limit: 90 seconds (1.5 minutes) unless cookiescambait@gmail.com
+    if (isAudio && !isExempt) {
+      try {
+        const durationSeconds = await getAudioDuration(file);
+        if (durationSeconds > 90) {
+          setMediaError(`Audio file "${file.name}" is ${Math.round(durationSeconds)}s long. Call audio recordings are restricted to clips under 90 seconds (1.5 minutes).`);
+          return;
+        }
+      } catch (err) {
+        console.warn('[ScammerDetailModal] Could not inspect audio duration, proceeding with file read:', err);
+      }
     }
 
     setMediaError(null);
@@ -406,6 +438,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       };
 
       setEvidenceMedia((prev) => [newItem, ...prev]);
+    };
+    reader.onerror = (err) => {
+      console.error('[ScammerDetailModal] FileReader error:', err);
+      setMediaError('Error reading file content.');
     };
     reader.readAsDataURL(file);
   };
@@ -509,7 +545,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       return (
         <div
           ref={topBannerRef}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-amber-500 bg-slate-950 shadow-lg text-amber-400 text-xs sm:text-sm font-extrabold animate-fadeIn"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border-2 border-amber-500 bg-slate-950 shadow-lg text-amber-400 text-xs sm:text-sm font-extrabold animate-fadeIn"
         >
           <Building className="w-4 h-4 text-amber-400 shrink-0" />
           <span className="text-amber-400 font-extrabold text-sm">&quot;</span>
@@ -523,7 +559,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             }}
             placeholder="Fake Org / Company"
             autoFocus
-            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs sm:text-sm text-amber-300 font-extrabold focus:outline-none focus:border-amber-400 w-28 sm:w-36 font-sans"
+            className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs sm:text-sm text-amber-300 font-extrabold focus:outline-none focus:border-amber-400 w-32 sm:w-40 font-sans"
             title="Fake Organization name (press Enter or click out to save)"
           />
           <span className="text-amber-400 font-extrabold text-sm">-</span>
@@ -534,7 +570,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               if (e.key === 'Enter') handleCommitTopBanner();
               if (e.key === 'Escape') setIsEditingTopBanner(false);
             }}
-            className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs sm:text-sm text-amber-300 font-extrabold focus:outline-none focus:border-amber-400 cursor-pointer"
+            className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs sm:text-sm text-amber-300 font-extrabold focus:outline-none focus:border-amber-400 cursor-pointer"
             title="Scam Type (press Enter or click out to save)"
           >
             <option value="Tech / Refund">Tech / Refund</option>
@@ -551,7 +587,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             className="p-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold ml-1 transition cursor-pointer"
             title="Save changes (or click outside)"
           >
-            <Check className="w-3.5 h-3.5 stroke-[3]" />
+            <Check className="w-4 h-4 stroke-[3]" />
           </button>
         </div>
       );
@@ -561,14 +597,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       <button
         type="button"
         onClick={handleStartEditingTopBanner}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-600/70 bg-amber-950/30 hover:bg-amber-950/60 hover:border-amber-400 text-amber-400 transition cursor-pointer shadow-sm group"
+        className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-amber-600/70 bg-amber-950/30 hover:bg-amber-950/60 hover:border-amber-400 text-amber-400 transition cursor-pointer shadow-sm group"
         title="Click to edit Organization and Scam Type (Click out to save)"
       >
         <Building className="w-4 h-4 text-amber-400 shrink-0" />
         <span className="text-xs sm:text-sm font-extrabold tracking-tight text-amber-400 group-hover:text-amber-300">
           &quot;{displayOrg ? `${displayOrg} - ${displayScamType}` : displayScamType}&quot;
         </span>
-        <Edit3 className="w-3 h-3 text-amber-400/50 group-hover:text-amber-300 ml-1 shrink-0 transition" />
+        <Edit3 className="w-3.5 h-3.5 text-amber-400/50 group-hover:text-amber-300 ml-1 shrink-0 transition" />
       </button>
     );
   };
@@ -576,26 +612,26 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-sm text-slate-100 flex flex-col p-2 sm:p-4 gap-3 overflow-hidden antialiased font-sans">
       {/* ODOO TOP CONTROL BAR: Breadcrumb Navigation + Center Editable Banner + Actions */}
-      <header className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
-        {/* Left Actions & Identity */}
+      <header className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
+        {/* Left Actions & Identity (Prioritizing alias over fullName when set) */}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-slate-700"
+            className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-700"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
+            <ArrowLeft className="w-4 h-4" />
             <span>Pipeline</span>
           </button>
 
-          <div className="h-5 w-px bg-slate-800 hidden sm:block" />
+          <div className="h-6 w-px bg-slate-800 hidden sm:block" />
 
           {/* Quick Flag Toggle */}
           <button
             type="button"
             onClick={handleToggleFlag}
             title={flagged ? 'Flagged target (Click to unflag)' : 'Click to quick flag target'}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer border ${
+            className={`w-9 h-9 rounded-lg flex items-center justify-center transition cursor-pointer border ${
               flagged
                 ? 'bg-rose-600/20 text-rose-400 border-rose-500/40 hover:bg-rose-600/30'
                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:border-slate-600'
@@ -606,7 +642,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
           {/* Priority Stars Rating */}
           <div
-            className="flex items-center gap-0.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-700"
+            className="flex items-center gap-0.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-700"
             title={`Priority Rating: ${priority} of 3. Click to adjust.`}
           >
             {[1, 2, 3].map((star) => (
@@ -618,36 +654,62 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   setPriority(newPriority);
                   handleSaveScammerInfo({ priority: newPriority });
                 }}
-                className="text-sm px-0.5 hover:scale-125 transition cursor-pointer"
+                className="text-base px-0.5 hover:scale-125 transition cursor-pointer"
               >
-                <span className={star <= priority ? 'text-amber-400 font-bold' : 'text-slate-700'}>
+                <span className={star <= priority ? 'text-amber-400 font-extrabold' : 'text-slate-700'}>
                   ★
                 </span>
               </button>
             ))}
           </div>
 
-          {/* Name & Alias Horizontal Stack */}
+          {/* Primary Target Name Header (Prioritizing Alias over Full Name) */}
           <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              onBlur={() => handleSaveScammerInfo()}
-              placeholder="Target Full Name"
-              className="text-base sm:text-lg font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-rose-500 focus:outline-none tracking-tight max-w-[180px] sm:max-w-[240px]"
-            />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-extrabold text-slate-400 uppercase">Target:</span>
+                <input
+                  type="text"
+                  value={alias ? alias : fullName}
+                  onChange={(e) => {
+                    if (alias) {
+                      setAlias(e.target.value);
+                    } else {
+                      setFullName(e.target.value);
+                    }
+                  }}
+                  onBlur={() => handleSaveScammerInfo()}
+                  placeholder="Target Alias / Name"
+                  className="text-lg sm:text-xl font-extrabold text-amber-300 bg-transparent border-b border-transparent hover:border-amber-500/50 focus:border-amber-400 focus:outline-none tracking-tight max-w-[200px] sm:max-w-[280px]"
+                  title="Primary Target Display Name (Prioritizing Alias)"
+                />
+              </div>
 
-            <div className="hidden sm:flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Alias:</span>
-              <input
-                type="text"
-                value={alias}
-                onChange={(e) => setAlias(e.target.value)}
-                onBlur={() => handleSaveScammerInfo()}
-                placeholder="e.g. Willy Fin"
-                className="text-xs font-semibold text-amber-300 bg-transparent border-b border-slate-700 focus:border-amber-400 focus:outline-none w-24 sm:w-32 font-mono"
-              />
+              {alias ? (
+                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Real Name:</span>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    onBlur={() => handleSaveScammerInfo()}
+                    placeholder="Full Name"
+                    className="text-xs sm:text-sm font-semibold text-slate-200 bg-transparent border-b border-slate-700 focus:border-rose-500 focus:outline-none w-28 sm:w-36"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">+ Alias:</span>
+                  <input
+                    type="text"
+                    value={alias}
+                    onChange={(e) => setAlias(e.target.value)}
+                    onBlur={() => handleSaveScammerInfo()}
+                    placeholder="e.g. Willy Fin"
+                    className="text-xs sm:text-sm font-semibold text-amber-300 bg-transparent border-b border-slate-700 focus:border-amber-400 focus:outline-none w-24 sm:w-32 font-mono"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -661,8 +723,8 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         <div className="flex items-center gap-2">
           {/* Quick Edit Total Time Badge */}
           {isEditingTotalTime ? (
-            <div className="flex items-center gap-1 bg-slate-900 border-2 border-amber-500 rounded-lg px-2 py-1 shadow-lg animate-fadeIn text-xs font-mono font-bold text-white">
-              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <div className="flex items-center gap-1 bg-slate-900 border-2 border-amber-500 rounded-lg px-2.5 py-1.5 shadow-lg animate-fadeIn text-xs sm:text-sm font-mono font-bold text-white">
+              <Clock className="w-4 h-4 text-amber-400 shrink-0" />
               <input
                 type="number"
                 min="0"
@@ -674,10 +736,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   if (e.key === 'Escape') setIsEditingTotalTime(false);
                 }}
                 autoFocus
-                className="w-8 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                className="w-9 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
                 title="Hours"
               />
-              <span className="text-[10px] text-slate-400">h</span>
+              <span className="text-xs text-slate-400">h</span>
               <input
                 type="number"
                 min="0"
@@ -689,22 +751,22 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   if (e.key === 'Enter') handleCommitEditingTime();
                   if (e.key === 'Escape') setIsEditingTotalTime(false);
                 }}
-                className="w-8 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                className="w-9 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
                 title="Minutes"
               />
-              <span className="text-[10px] text-slate-400">m</span>
+              <span className="text-xs text-slate-400">m</span>
             </div>
           ) : (
             <button
               type="button"
               onClick={handleStartEditingTime}
-              className="flex items-center gap-2 text-xs text-slate-300 bg-slate-950/90 hover:bg-slate-800 hover:border-amber-500/50 px-2.5 py-1.5 rounded-lg border border-slate-800 font-mono transition cursor-pointer"
+              className="flex items-center gap-2 text-xs sm:text-sm text-slate-300 bg-slate-950/90 hover:bg-slate-800 hover:border-amber-500/50 px-3 py-1.5 rounded-lg border border-slate-800 font-mono transition cursor-pointer"
               title="Click to quick edit total time wasted"
             >
-              <Clock className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-emerald-400 font-bold">{todayMinutes}m Today</span>
+              <Clock className="w-4 h-4 text-emerald-400" />
+              <span className="text-emerald-400 font-extrabold">{todayMinutes}m Today</span>
               <span className="text-slate-600">|</span>
-              <span className="text-amber-300 font-bold underline decoration-dotted">
+              <span className="text-amber-300 font-extrabold underline decoration-dotted">
                 {totalMinutes}m Total
               </span>
             </button>
@@ -713,9 +775,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           <button
             type="button"
             onClick={() => copyToClipboard(`${window.location.origin}/share/${scammer.id}`)}
-            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-slate-800 text-slate-200 border-slate-700 hover:text-white"
+            className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 border bg-slate-800 text-slate-200 border-slate-700 hover:text-white"
           >
-            <Copy className="w-3.5 h-3.5 text-amber-400" />
+            <Copy className="w-4 h-4 text-amber-400" />
             <span className="hidden sm:inline">{copySuccess ? 'Copied!' : 'Share'}</span>
           </button>
 
@@ -727,7 +789,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 onClose();
               }
             }}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
+            className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
             title="Delete Target Case"
           >
             <Trash2 className="w-4 h-4" />
@@ -736,7 +798,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -744,9 +806,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       </header>
 
       {/* ODOO HORIZONTAL STATUS PROGRESSION CHEVRON RIBBON */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2 overflow-x-auto shadow-sm">
-        <div className="flex items-center gap-1.5 flex-1 min-w-max">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-2 hidden md:inline">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2 overflow-x-auto shadow-sm">
+        <div className="flex items-center gap-2 flex-1 min-w-max">
+          <span className="text-xs font-extrabold text-slate-300 uppercase tracking-wider mr-2 hidden md:inline">
             Stage:
           </span>
           {ODOO_STAGES.map((stg, idx) => {
@@ -756,15 +818,15 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 key={stg}
                 type="button"
                 onClick={() => handleStatusChange(stg)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer border ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition flex items-center gap-2 cursor-pointer border ${
                   isActive
-                    ? 'bg-[#714B67] text-white border-[#8f5e82] shadow-md shadow-[#714B67]/30'
+                    ? 'bg-[#714B67] text-white border-[#8f5e82] shadow-md shadow-[#714B67]/30 font-extrabold'
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
                 }`}
               >
                 <span>{stg}</span>
                 {idx < ODOO_STAGES.length - 1 && (
-                  <ChevronRight className="w-3.5 h-3.5 opacity-40 -mr-1" />
+                  <ChevronRight className="w-4 h-4 opacity-40 -mr-1" />
                 )}
               </button>
             );
@@ -782,24 +844,24 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         {/* LEFT PANE (Col Span 7): The Dossier Sheet with Horizontal Property Grid & Notebook Tabs */}
         <div className="lg:col-span-7 flex flex-col gap-3 overflow-y-auto pr-1">
           {/* Section 1: Horizontal 2-Column Key Intelligence Field Matrix */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-3 shadow">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3.5 shadow">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">
                   Target Profile &amp; Intelligence
                 </h3>
               </div>
-              <span className="text-[11px] text-slate-400 font-mono">
+              <span className="text-xs text-slate-400 font-mono font-bold">
                 ID: {scammer.id.slice(0, 8)}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs sm:text-sm">
               {/* Column 1: Telecom & Contact Intel */}
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                     Primary Phone
                   </label>
                   <div className="flex items-center gap-1.5">
@@ -809,23 +871,23 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       value={phoneList[0]}
                       onChange={(e) => handlePhoneChange(0, e.target.value)}
                       onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-emerald-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:border-emerald-500 focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => copyToClipboard(phoneList[0])}
-                      className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                      className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
                       title="Copy phone"
                     >
-                      <Copy className="w-3.5 h-3.5" />
+                      <Copy className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
-                      <MessageCircle className="w-3 h-3 text-emerald-400" />
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1 flex items-center gap-1">
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
                       WhatsApp
                     </label>
                     <input
@@ -834,12 +896,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       value={whatsappNumber}
                       onChange={(e) => setWhatsappNumber(e.target.value)}
                       onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-300 font-mono focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-emerald-300 font-mono font-semibold focus:outline-none focus:border-emerald-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Carrier / VoIP
                     </label>
                     <input
@@ -848,14 +910,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       value={carrier}
                       onChange={(e) => setCarrier(e.target.value)}
                       onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-slate-600"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold focus:outline-none focus:border-slate-600"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Location / Region
                     </label>
                     <input
@@ -864,12 +926,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
                       onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-slate-600"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold focus:outline-none focus:border-slate-600"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Remote Access ID
                     </label>
                     <input
@@ -878,17 +940,17 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       value={remoteAccessId}
                       onChange={(e) => setRemoteAccessId(e.target.value)}
                       onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-slate-600"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Column 2: Scam Classification & Financial Metrics */}
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Scam Type
                     </label>
                     <select
@@ -898,7 +960,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                         setScamType(val);
                         handleSaveScammerInfo({ scamType: val });
                       }}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-amber-300 font-semibold focus:outline-none focus:border-amber-400"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-amber-300 font-bold focus:outline-none focus:border-amber-400"
                     >
                       <option value="Crypto Investment">Crypto Investment</option>
                       <option value="IRS / Govt">IRS / Govt</option>
@@ -910,7 +972,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Threat Level
                     </label>
                     <select
@@ -920,7 +982,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                         setDangerLevel(val);
                         handleSaveScammerInfo({ dangerLevel: val });
                       }}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-slate-600"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold focus:outline-none focus:border-slate-600"
                     >
                       <option value="low">Low Risk</option>
                       <option value="medium">Medium Risk</option>
@@ -932,7 +994,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Fake Company / Org
                     </label>
                     <input
@@ -941,12 +1003,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       value={organization}
                       onChange={(e) => setOrganization(e.target.value)}
                       onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-slate-600"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold focus:outline-none focus:border-slate-600"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Loss Prevented ($)
                     </label>
                     <input
@@ -960,13 +1022,13 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                         setTargetValue(val);
                         handleSaveScammerInfo({ targetValue: val });
                       }}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-emerald-400 font-mono font-extrabold focus:outline-none focus:border-emerald-500"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                     Logged Scammer IP
                   </label>
                   <input
@@ -975,7 +1037,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     value={ipAddress}
                     onChange={(e) => setIpAddress(e.target.value)}
                     onBlur={() => handleSaveScammerInfo()}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-slate-600"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
                   />
                 </div>
               </div>
@@ -985,66 +1047,66 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           {/* Section 2: Odoo Horizontal Notebook Tabs (Notes, Receiver Assets, Evidence, Telecom) */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col flex-1 shadow overflow-hidden">
             {/* Tab Strip */}
-            <div className="flex items-center gap-1 bg-slate-950 px-3 pt-2 border-b border-slate-800 overflow-x-auto">
+            <div className="flex items-center gap-1 bg-slate-950 px-3 pt-2.5 border-b border-slate-800 overflow-x-auto">
               <button
                 type="button"
                 onClick={() => setActiveTab('notes')}
-                className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition flex items-center gap-1.5 border-t border-x ${
+                className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-t-lg transition flex items-center gap-1.5 border-t border-x cursor-pointer ${
                   activeTab === 'notes'
                     ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
                     : 'text-slate-400 border-transparent hover:text-slate-200'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5 text-amber-400" />
+                <FileText className="w-4 h-4 text-amber-400" />
                 <span>Operations Notes</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('assets')}
-                className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition flex items-center gap-1.5 border-t border-x ${
+                className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-t-lg transition flex items-center gap-1.5 border-t border-x cursor-pointer ${
                   activeTab === 'assets'
                     ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
                     : 'text-slate-400 border-transparent hover:text-slate-200'
                 }`}
               >
-                <DollarSign className="w-3.5 h-3.5 text-rose-400" />
+                <DollarSign className="w-4 h-4 text-rose-400" />
                 <span>Receiver Assets ({scammer.fraudAccounts.length})</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('evidence')}
-                className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition flex items-center gap-1.5 border-t border-x ${
+                className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-t-lg transition flex items-center gap-1.5 border-t border-x cursor-pointer ${
                   activeTab === 'evidence'
                     ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
                     : 'text-slate-400 border-transparent hover:text-slate-200'
                 }`}
               >
-                <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
+                <ImageIcon className="w-4 h-4 text-sky-400" />
                 <span>Evidence Vault ({evidenceMedia.length})</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('telecom')}
-                className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition flex items-center gap-1.5 border-t border-x ${
+                className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-t-lg transition flex items-center gap-1.5 border-t border-x cursor-pointer ${
                   activeTab === 'telecom'
                     ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
                     : 'text-slate-400 border-transparent hover:text-slate-200'
                 }`}
               >
-                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                <Phone className="w-4 h-4 text-emerald-400" />
                 <span>All Phone Numbers</span>
               </button>
             </div>
 
             {/* Tab 1: Operations Notes */}
             {activeTab === 'notes' && (
-              <div className="p-3.5 flex flex-col flex-1 space-y-2">
-                <div className="flex items-center justify-between text-slate-400 text-xs">
+              <div className="p-4 flex flex-col flex-1 space-y-2">
+                <div className="flex items-center justify-between text-slate-300 text-xs sm:text-sm font-bold">
                   <span>General Dossier &amp; Behavioral Notes:</span>
-                  <span className="text-[10px]">Autosaved on blur</span>
+                  <span className="text-xs text-slate-400 font-mono">Autosaved on blur</span>
                 </div>
                 <textarea
                   rows={6}
@@ -1052,24 +1114,24 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   onChange={(e) => setNotes(e.target.value)}
                   onBlur={() => handleSaveScammerInfo()}
                   placeholder="Behavioral traits, accents, background call-center sounds, fake details and credit cards fed during bait sessions..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-100 flex-1 min-h-[140px] leading-relaxed focus:outline-none focus:border-slate-700"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs sm:text-sm font-semibold text-slate-100 flex-1 min-h-[140px] leading-relaxed focus:outline-none focus:border-slate-700"
                 />
               </div>
             )}
 
             {/* Tab 2: Receiver Assets */}
             {activeTab === 'assets' && (
-              <div className="p-3.5 space-y-3 flex-1 flex flex-col">
+              <div className="p-4 space-y-3 flex-1 flex flex-col">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-300 font-semibold">
+                  <span className="text-xs sm:text-sm text-slate-200 font-extrabold">
                     Reported Accounts, Crypto Wallets &amp; Money Mules
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowAddFraud(!showAddFraud)}
-                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 transition"
+                    className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer shadow"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                     <span>{showAddFraud ? 'Cancel' : 'Add Asset'}</span>
                   </button>
                 </div>
@@ -1077,15 +1139,15 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 {showAddFraud && (
                   <form
                     onSubmit={handleAddFraudAccount}
-                    className="bg-slate-950 border border-rose-500/40 rounded-xl p-3 space-y-2 text-xs animate-fadeIn"
+                    className="bg-slate-950 border border-rose-500/40 rounded-xl p-3.5 space-y-2.5 text-xs sm:text-sm animate-fadeIn"
                   >
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block text-[10px] text-slate-400 mb-0.5">Asset Type</label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Asset Type</label>
                         <select
                           value={fraudType}
                           onChange={(e) => setFraudType(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold"
                         >
                           <option value="bank_account">Bank Account</option>
                           <option value="crypto_wallet">Crypto Wallet</option>
@@ -1098,7 +1160,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-slate-400 mb-0.5">
+                        <label className="block text-xs font-bold text-slate-300 mb-1">
                           Details (Account / Address / ID)
                         </label>
                         <input
@@ -1107,31 +1169,31 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                           placeholder="e.g. Chase 12345678 or bc1q..."
                           value={fraudDetails}
                           onChange={(e) => setFraudDetails(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white font-mono"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold"
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block text-[10px] text-slate-400 mb-0.5">Bank / Institution</label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Bank / Institution</label>
                         <input
                           type="text"
                           placeholder="e.g. JPMorgan Chase"
                           value={fraudInstitution}
                           onChange={(e) => setFraudInstitution(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-slate-400 mb-0.5">Account Holder Name</label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Account Holder Name</label>
                         <input
                           type="text"
                           placeholder="e.g. Money Mule"
                           value={fraudHolder}
                           onChange={(e) => setFraudHolder(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold"
                         />
                       </div>
                     </div>
@@ -1140,13 +1202,13 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setShowAddFraud(false)}
-                        className="px-2.5 py-1 text-xs text-slate-400 hover:text-white"
+                        className="px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded transition"
+                        className="px-3.5 py-1.5 text-xs sm:text-sm font-bold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition"
                       >
                         Save Asset
                       </button>
@@ -1154,50 +1216,52 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   </form>
                 )}
 
-                <div className="space-y-2 overflow-y-auto max-h-[220px]">
+                <div className="space-y-2.5 overflow-y-auto max-h-[220px]">
                   {scammer.fraudAccounts.length === 0 ? (
-                    <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs p-3">
+                    <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs sm:text-sm p-4">
                       No receiver assets logged yet. Click &quot;Add Asset&quot; to register illicit accounts.
                     </div>
                   ) : (
                     scammer.fraudAccounts.map((acc) => (
                       <div
                         key={acc.id}
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between gap-3 hover:border-slate-700 transition"
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-center justify-between gap-3 hover:border-slate-700 transition"
                       >
-                        <div className="min-w-0 space-y-0.5">
+                        <div className="min-w-0 space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            <span className="text-xs font-extrabold uppercase px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
                               {formatAccountTypeLabel(acc.accountType)}
                             </span>
                             {acc.institution && (
-                              <span className="text-xs text-slate-200 font-semibold truncate">
+                              <span className="text-xs sm:text-sm text-slate-200 font-bold truncate">
                                 {acc.institution}
                               </span>
                             )}
                             {acc.holderName && (
-                              <span className="text-[11px] text-slate-400">({acc.holderName})</span>
+                              <span className="text-xs text-slate-400 font-semibold">({acc.holderName})</span>
                             )}
                           </div>
-                          <p className="text-xs font-mono text-slate-100 truncate">{acc.accountDetails}</p>
+                          <p className="text-xs sm:text-sm font-mono text-slate-100 font-semibold truncate">
+                            {acc.accountDetails}
+                          </p>
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
                             onClick={() => copyToClipboard(acc.accountDetails)}
-                            className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white"
+                            className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
                             title="Copy details"
                           >
-                            <Copy className="w-3.5 h-3.5" />
+                            <Copy className="w-4 h-4" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteFraudAccount(acc.id)}
-                            className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
+                            className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400"
                             title="Delete"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -1209,7 +1273,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
             {/* Tab 3: Evidence Vault */}
             {activeTab === 'evidence' && (
-              <div className="p-3.5 space-y-3 flex-1 flex flex-col">
+              <div className="p-4 space-y-3 flex-1 flex flex-col">
                 {/* Drag, Drop & Paste Zone */}
                 <div
                   onDragOver={handleMediaDragOver}
@@ -1217,7 +1281,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   onDrop={handleMediaDrop}
                   onPaste={handleMediaPaste}
                   tabIndex={0}
-                  className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition focus:outline-none ${
+                  className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition focus:outline-none ${
                     isDraggingMedia
                       ? 'border-sky-500 bg-sky-500/10'
                       : 'border-slate-800 bg-slate-950 hover:border-slate-700'
@@ -1242,35 +1306,35 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     }}
                     className="hidden"
                   />
-                  <div className="flex flex-col items-center justify-center gap-1 pointer-events-none">
-                    <Upload className="w-4 h-4 text-sky-400" />
-                    <p className="text-xs font-semibold text-slate-200">
+                  <div className="flex flex-col items-center justify-center gap-1.5 pointer-events-none">
+                    <Upload className="w-5 h-5 text-sky-400" />
+                    <p className="text-xs sm:text-sm font-bold text-slate-200">
                       Drag &amp; drop images/audio, click to browse, or paste (Ctrl+V)
                     </p>
-                    <p className="text-[10px] text-slate-400">
-                      Images (.png, .jpg) &amp; Audio (.mp3, .wav) • Limit 3MB
+                    <p className="text-xs text-slate-400 font-semibold">
+                      Images (.png, .jpg) &amp; Audio (.mp3, .wav) • Limit 3MB • Audio clips &lt; 90 seconds
                     </p>
                   </div>
                 </div>
 
                 {mediaError && (
-                  <div className="p-2 rounded bg-rose-950/60 border border-rose-800 text-xs text-rose-300 flex items-center gap-1.5">
+                  <div className="p-2.5 rounded-lg bg-rose-950/80 border border-rose-800 text-xs sm:text-sm text-rose-300 font-semibold flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
                     <span>{mediaError}</span>
                   </div>
                 )}
 
                 {/* Evidence List */}
-                <div className="space-y-2 overflow-y-auto max-h-[220px]">
+                <div className="space-y-2.5 overflow-y-auto max-h-[220px]">
                   {evidenceMedia.length === 0 ? (
-                    <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs p-3">
+                    <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs sm:text-sm p-4">
                       No evidence or media files uploaded yet. Drag &amp; drop or paste files above.
                     </div>
                   ) : (
                     evidenceMedia.map((item) => (
                       <div
                         key={item.id}
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-2 hover:border-slate-700 transition"
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2 hover:border-slate-700 transition"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1286,20 +1350,20 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                                   type="text"
                                   value={editingMediaName}
                                   onChange={(e) => setEditingMediaName(e.target.value)}
-                                  className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white w-full"
+                                  className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs sm:text-sm text-white w-full font-semibold"
                                   autoFocus
                                 />
                                 <button
                                   type="button"
                                   onClick={() => handleSaveMediaName(item.id)}
-                                  className="p-1 rounded bg-emerald-600 text-white text-[10px]"
+                                  className="p-1 rounded bg-emerald-600 text-white text-xs font-bold"
                                 >
-                                  <Check className="w-3 h-3" />
+                                  <Check className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             ) : (
                               <span
-                                className="text-xs font-semibold text-slate-100 truncate cursor-pointer hover:text-sky-300"
+                                className="text-xs sm:text-sm font-bold text-slate-100 truncate cursor-pointer hover:text-sky-300"
                                 onClick={() => {
                                   if (item.type === 'image') setPreviewImage(item.url);
                                 }}
@@ -1310,7 +1374,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[10px] text-slate-400 font-mono">
+                            <span className="text-xs text-slate-400 font-mono font-semibold">
                               {(item.sizeBytes / 1024).toFixed(0)}KB
                             </span>
 
@@ -1318,10 +1382,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setPreviewImage(item.url)}
-                                className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
+                                className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white"
                                 title="Preview full size"
                               >
-                                <Eye className="w-3.5 h-3.5" />
+                                <Eye className="w-4 h-4" />
                               </button>
                             )}
 
@@ -1331,26 +1395,26 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                                 setEditingMediaId(item.id);
                                 setEditingMediaName(item.name);
                               }}
-                              className="p-1 rounded bg-slate-800 text-slate-400 hover:text-amber-300"
+                              className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-amber-300"
                               title="Rename file"
                             >
-                              <Edit3 className="w-3.5 h-3.5" />
+                              <Edit3 className="w-4 h-4" />
                             </button>
 
                             <button
                               type="button"
                               onClick={() => handleDeleteMedia(item.id)}
-                              className="p-1 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
+                              className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
                               title="Delete file"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
 
                         {item.type === 'image' ? (
                           <div
-                            className="w-full h-20 bg-slate-900 rounded overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-sky-500/50 transition"
+                            className="w-full h-24 bg-slate-900 rounded-lg overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-sky-500/50 transition"
                             onClick={() => setPreviewImage(item.url)}
                           >
                             <img
@@ -1360,8 +1424,8 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                             />
                           </div>
                         ) : (
-                          <div className="bg-slate-900 rounded p-1.5 border border-slate-800">
-                            <audio controls src={item.url} className="w-full h-8" />
+                          <div className="bg-slate-900 rounded-lg p-2 border border-slate-800">
+                            <audio controls src={item.url} className="w-full h-9" />
                           </div>
                         )}
                       </div>
@@ -1373,14 +1437,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
             {/* Tab 4: Telecom & All 4 Phone Numbers */}
             {activeTab === 'telecom' && (
-              <div className="p-3.5 space-y-3 flex-1 flex flex-col">
-                <span className="text-xs text-slate-300 font-semibold">
+              <div className="p-4 space-y-3 flex-1 flex flex-col">
+                <span className="text-xs sm:text-sm text-slate-200 font-extrabold">
                   Telephone Routing &amp; Direct Dials (Up to 4 Numbers)
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[0, 1, 2, 3].map((idx) => (
-                    <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-3">
+                      <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                         Phone #{idx + 1} {idx === 0 ? '(Primary Direct)' : ''}
                       </label>
                       <input
@@ -1389,7 +1453,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                         value={phoneList[idx]}
                         onChange={(e) => handlePhoneChange(idx, e.target.value)}
                         onBlur={() => handleSaveScammerInfo()}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white font-mono focus:border-emerald-500 focus:outline-none"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:border-emerald-500 focus:outline-none"
                       />
                     </div>
                   ))}
@@ -1402,12 +1466,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         {/* RIGHT PANE (Col Span 5): ODOO EFFORTLESS COMMUNICATION & CHATTER STREAM */}
         <div className="lg:col-span-5 flex flex-col gap-3 overflow-hidden">
           {/* Chatter Container */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col flex-1 shadow overflow-hidden">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col flex-1 shadow overflow-hidden">
             {/* Chatter Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-2.5">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
               <div className="flex items-center gap-2">
                 <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">
                   Effortless Communication ({totalCallsCount})
                 </h3>
               </div>
@@ -1416,39 +1480,39 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowCallLogger(!showCallLogger)}
-                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1 transition shadow"
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm font-extrabold flex items-center gap-1.5 transition shadow cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4" />
                   <span>Log Call</span>
                 </button>
               </div>
             </div>
 
             {/* Horizontal Communication Stats Bar */}
-            <div className="grid grid-cols-4 gap-2 bg-slate-950 border border-slate-800 rounded-lg p-2 mb-3 text-center">
+            <div className="grid grid-cols-4 gap-2 bg-slate-950 border border-slate-800 rounded-lg p-2.5 mb-3 text-center">
               <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase">Today</p>
-                <p className="text-xs font-black text-emerald-400 mt-0.5">
+                <p className="text-xs text-slate-300 font-extrabold uppercase">Today</p>
+                <p className="text-xs sm:text-sm font-black text-emerald-400 mt-0.5">
                   {formatDurationDisplay(todayMinutes)}
                 </p>
               </div>
               <div
                 onClick={handleStartEditingTime}
-                className="cursor-pointer hover:bg-slate-900 rounded transition"
+                className="cursor-pointer hover:bg-slate-900 rounded transition p-0.5"
                 title="Click to quick edit time wasted"
               >
-                <p className="text-[10px] text-slate-400 font-bold uppercase">Total Wasted</p>
-                <p className="text-xs font-black text-amber-300 mt-0.5 underline decoration-dotted">
+                <p className="text-xs text-slate-300 font-extrabold uppercase">Total Wasted</p>
+                <p className="text-xs sm:text-sm font-black text-amber-300 mt-0.5 underline decoration-dotted">
                   {formatDurationDisplay(totalMinutes)}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase">Sessions</p>
-                <p className="text-xs font-black text-sky-400 mt-0.5">{totalCallsCount}</p>
+                <p className="text-xs text-slate-300 font-extrabold uppercase">Sessions</p>
+                <p className="text-xs sm:text-sm font-black text-sky-400 mt-0.5">{totalCallsCount}</p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase">Loss Prevented</p>
-                <p className="text-xs font-black text-rose-400 mt-0.5">
+                <p className="text-xs text-slate-300 font-extrabold uppercase">Loss Prevented</p>
+                <p className="text-xs sm:text-sm font-black text-rose-400 mt-0.5">
                   ${amountWastedDollars.toLocaleString()}
                 </p>
               </div>
@@ -1458,49 +1522,49 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             {showCallLogger && (
               <form
                 onSubmit={handleQuickLogCall}
-                className="bg-slate-950 border border-rose-500/30 rounded-xl p-2.5 mb-3 space-y-2 text-xs animate-fadeIn"
+                className="bg-slate-950 border border-rose-500/30 rounded-xl p-3 mb-3 space-y-2.5 text-xs sm:text-sm animate-fadeIn"
               >
                 <div className="grid grid-cols-4 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Hours</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-0.5">Hours</label>
                     <input
                       type="number"
                       min="0"
                       max="24"
                       value={loggerHours}
                       onChange={(e) => setLoggerHours(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono font-bold text-center"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs sm:text-sm text-white font-mono font-bold text-center"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Mins</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-0.5">Mins</label>
                     <input
                       type="number"
                       min="0"
                       max="59"
                       value={loggerMins}
                       onChange={(e) => setLoggerMins(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono font-bold text-center"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs sm:text-sm text-white font-mono font-bold text-center"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Secs</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-0.5">Secs</label>
                     <input
                       type="number"
                       min="0"
                       max="59"
                       value={loggerSecs}
                       onChange={(e) => setLoggerSecs(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono font-bold text-center"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs sm:text-sm text-white font-mono font-bold text-center"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Date</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-0.5">Date</label>
                     <input
                       type="date"
                       value={loggerDate}
                       onChange={(e) => setLoggerDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] text-white font-semibold cursor-pointer"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-1.5 py-1 text-xs sm:text-sm text-white font-semibold cursor-pointer"
                     />
                   </div>
                 </div>
@@ -1511,11 +1575,11 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     placeholder="Persona or notes (e.g. Grandma Gertrude, refund denied...)"
                     value={loggerNotes}
                     onChange={(e) => setLoggerNotes(e.target.value)}
-                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-rose-500"
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs sm:text-sm text-white font-semibold focus:outline-none focus:border-rose-500"
                   />
                   <button
                     type="submit"
-                    className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shrink-0 transition"
+                    className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs sm:text-sm shrink-0 transition cursor-pointer"
                   >
                     Log Entry
                   </button>
@@ -1524,12 +1588,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             )}
 
             {/* Chronological Chatter Stream (Odoo Effortless Communication Style) */}
-            <div className="space-y-2 overflow-y-auto flex-1 pr-1">
+            <div className="space-y-2.5 overflow-y-auto flex-1 pr-1">
               {totalCallsCount === 0 ? (
-                <div className="text-center py-10 bg-slate-950/50 rounded-xl border border-slate-800 text-slate-400 text-xs p-4 flex flex-col items-center justify-center gap-2">
-                  <Phone className="w-6 h-6 text-slate-600" />
-                  <p>No communication records yet.</p>
-                  <p className="text-[11px] text-slate-500">
+                <div className="text-center py-10 bg-slate-950/50 rounded-xl border border-slate-800 text-slate-400 text-xs sm:text-sm p-4 flex flex-col items-center justify-center gap-2">
+                  <Phone className="w-7 h-7 text-slate-600" />
+                  <p className="font-semibold">No communication records yet.</p>
+                  <p className="text-xs text-slate-500 font-medium">
                     Use the &quot;Log Call&quot; tray above to track conversations and recordings.
                   </p>
                 </div>
@@ -1537,18 +1601,18 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 scammer.calls.map((call) => (
                   <div
                     key={call.id}
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 hover:border-slate-700 transition shadow-sm"
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5 hover:border-slate-700 transition shadow-sm"
                   >
                     {/* Entry Header */}
-                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1.5">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold text-[10px]">
+                        <div className="w-6 h-6 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold text-xs">
                           📞
                         </div>
-                        <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold font-mono text-xs border border-rose-500/30">
+                        <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-extrabold font-mono text-xs sm:text-sm border border-rose-500/30">
                           {call.durationMinutes}m duration
                         </span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs sm:text-sm text-slate-400 font-medium">
                           {new Date(call.date).toLocaleDateString([], {
                             month: 'short',
                             day: 'numeric',
@@ -1563,20 +1627,20 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                         className="text-slate-500 hover:text-rose-400 p-1 transition"
                         title="Delete record"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
 
                     {/* Victim Persona & Notes */}
                     {call.victimPersonaUsed && (
-                      <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold">
-                        <UserIcon className="w-3 h-3" />
+                      <div className="flex items-center gap-1.5 text-xs sm:text-sm text-amber-400 font-bold">
+                        <UserIcon className="w-3.5 h-3.5" />
                         <span>Persona: {call.victimPersonaUsed}</span>
                       </div>
                     )}
 
                     {call.notes && (
-                      <p className="text-xs text-slate-200 leading-relaxed bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                      <p className="text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 font-medium">
                         {call.notes}
                       </p>
                     )}
@@ -1608,7 +1672,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             <button
               type="button"
               onClick={() => setPreviewImage(null)}
-              className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-white hover:bg-rose-600 transition z-10 cursor-pointer"
+              className="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white hover:bg-rose-600 transition z-10 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
