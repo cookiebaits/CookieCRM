@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Phone,
@@ -100,6 +100,73 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [isEditingTotalTime, setIsEditingTotalTime] = useState(false);
   const [editHoursVal, setEditHoursVal] = useState<string>('0');
   const [editMinsVal, setEditMinsVal] = useState<string>('0');
+
+  // Top Banner (Organization & Scam Type) Quick-Edit State (click, edit, click out to save)
+  const [isEditingTopBanner, setIsEditingTopBanner] = useState(false);
+  const [editBannerOrg, setEditBannerOrg] = useState(scammer.organization || '');
+  const [editBannerScamType, setEditBannerScamType] = useState(scammer.scamType || 'Tech / Refund');
+  const topBannerRef = useRef<HTMLDivElement>(null);
+
+  // Sync state when scammer changes
+  useEffect(() => {
+    setFullName(scammer.fullName);
+    setAlias(scammer.alias || '');
+    setStatus(scammer.status);
+    setFlagged(scammer.flagged);
+    setDangerLevel(scammer.dangerLevel || 'medium');
+    setTargetValue(scammer.targetValue || 0);
+    setPriority(scammer.priority || 1);
+    setCarrier(scammer.carrier || '');
+    setLocation(scammer.location || '');
+    setScamType(scammer.scamType || 'Tech / Refund');
+    setOrganization(scammer.organization || '');
+    setRemoteAccessId(scammer.remoteAccessId || '');
+    setIpAddress(scammer.ipAddress || '');
+    setNotes(scammer.notes || '');
+
+    const activeP =
+      Array.isArray(scammer.phoneNumbers) && scammer.phoneNumbers.length > 0
+        ? scammer.phoneNumbers
+        : [scammer.phoneNumber];
+    const list = [...activeP];
+    while (list.length < 4) list.push('');
+    setPhoneList(list.slice(0, 4));
+
+    setWhatsappNumber(scammer.whatsappNumber || '');
+    setEditBannerOrg(scammer.organization || '');
+    setEditBannerScamType(scammer.scamType || 'Tech / Refund');
+  }, [scammer]);
+
+  // Click-outside listener to save top banner changes immediately
+  useEffect(() => {
+    if (!isEditingTopBanner) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (topBannerRef.current && !topBannerRef.current.contains(e.target as Node)) {
+        handleCommitTopBanner();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isEditingTopBanner, editBannerOrg, editBannerScamType]);
+
+  const handleStartEditingTopBanner = () => {
+    setEditBannerOrg(organization || '');
+    setEditBannerScamType(scamType || 'Tech / Refund');
+    setIsEditingTopBanner(true);
+  };
+
+  const handleCommitTopBanner = () => {
+    if (!isEditingTopBanner) return;
+    setIsEditingTopBanner(false);
+    const newOrg = editBannerOrg.trim();
+    const newScamType = editBannerScamType.trim() || 'Tech / Refund';
+    setOrganization(newOrg);
+    setScamType(newScamType);
+    handleSaveScammerInfo({
+      organization: newOrg,
+      scamType: newScamType,
+    });
+  };
 
   const handleStartEditingTime = () => {
     const total = scammer.totalTimeSpent || 0;
@@ -433,9 +500,82 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   const currentCanonical = toCanonicalStatus(status);
 
+  // Render Top Banner (Editable Organization & Scam Type - Matching Reference Image)
+  const renderTopBanner = () => {
+    const displayOrg = organization?.trim() || '';
+    const displayScamType = scamType?.trim() || 'Tech / Refund';
+
+    if (isEditingTopBanner) {
+      return (
+        <div
+          ref={topBannerRef}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-amber-500 bg-slate-950 shadow-lg text-amber-400 text-xs sm:text-sm font-extrabold animate-fadeIn"
+        >
+          <Building className="w-4 h-4 text-amber-400 shrink-0" />
+          <span className="text-amber-400 font-extrabold text-sm">&quot;</span>
+          <input
+            type="text"
+            value={editBannerOrg}
+            onChange={(e) => setEditBannerOrg(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCommitTopBanner();
+              if (e.key === 'Escape') setIsEditingTopBanner(false);
+            }}
+            placeholder="Fake Org / Company"
+            autoFocus
+            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs sm:text-sm text-amber-300 font-extrabold focus:outline-none focus:border-amber-400 w-28 sm:w-36 font-sans"
+            title="Fake Organization name (press Enter or click out to save)"
+          />
+          <span className="text-amber-400 font-extrabold text-sm">-</span>
+          <select
+            value={editBannerScamType}
+            onChange={(e) => setEditBannerScamType(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCommitTopBanner();
+              if (e.key === 'Escape') setIsEditingTopBanner(false);
+            }}
+            className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs sm:text-sm text-amber-300 font-extrabold focus:outline-none focus:border-amber-400 cursor-pointer"
+            title="Scam Type (press Enter or click out to save)"
+          >
+            <option value="Tech / Refund">Tech / Refund</option>
+            <option value="Crypto Investment">Crypto Investment</option>
+            <option value="IRS / Govt">IRS / Govt</option>
+            <option value="Lotto / Sweepstakes">Lotto / Sweepstakes</option>
+            <option value="Spellcaster / Pet">Spellcaster / Pet</option>
+            <option value="Other">Other</option>
+          </select>
+          <span className="text-amber-400 font-extrabold text-sm">&quot;</span>
+          <button
+            type="button"
+            onClick={handleCommitTopBanner}
+            className="p-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold ml-1 transition cursor-pointer"
+            title="Save changes (or click outside)"
+          >
+            <Check className="w-3.5 h-3.5 stroke-[3]" />
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={handleStartEditingTopBanner}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-600/70 bg-amber-950/30 hover:bg-amber-950/60 hover:border-amber-400 text-amber-400 transition cursor-pointer shadow-sm group"
+        title="Click to edit Organization and Scam Type (Click out to save)"
+      >
+        <Building className="w-4 h-4 text-amber-400 shrink-0" />
+        <span className="text-xs sm:text-sm font-extrabold tracking-tight text-amber-400 group-hover:text-amber-300">
+          &quot;{displayOrg ? `${displayOrg} - ${displayScamType}` : displayScamType}&quot;
+        </span>
+        <Edit3 className="w-3 h-3 text-amber-400/50 group-hover:text-amber-300 ml-1 shrink-0 transition" />
+      </button>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-sm text-slate-100 flex flex-col p-2 sm:p-4 gap-3 overflow-hidden antialiased font-sans">
-      {/* ODOO TOP CONTROL BAR: Breadcrumb Navigation + Actions */}
+      {/* ODOO TOP CONTROL BAR: Breadcrumb Navigation + Center Editable Banner + Actions */}
       <header className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
         {/* Left Actions & Identity */}
         <div className="flex items-center gap-3">
@@ -510,6 +650,11 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               />
             </div>
           </div>
+        </div>
+
+        {/* Center Top Banner: Editable Fake Organization & Scam Type Pill */}
+        <div className="flex items-center justify-center my-1 sm:my-0">
+          {renderTopBanner()}
         </div>
 
         {/* Right Actions (Time counter, Share, Delete, Close) */}
@@ -626,14 +771,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           })}
         </div>
 
-        {/* Organization & Scam Category Tag */}
-        <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-lg">
-          <Building className="w-3.5 h-3.5 text-amber-400" />
-          <span>
-            {organization && scamType
-              ? `${organization} • ${scamType}`
-              : organization || scamType || 'Active Target'}
-          </span>
+        {/* Secondary View of Banner on Large Screens */}
+        <div className="hidden xl:flex items-center">
+          {renderTopBanner()}
         </div>
       </div>
 
