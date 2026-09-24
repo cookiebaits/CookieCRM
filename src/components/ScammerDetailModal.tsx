@@ -10,9 +10,7 @@ import {
   Check,
   DollarSign,
   Copy,
-  Calendar,
   Building,
-  Globe,
   MessageCircle,
   ArrowLeft,
   Flag,
@@ -24,14 +22,12 @@ import {
   ChevronRight,
   User as UserIcon,
   Radio,
-  ExternalLink,
-  ChevronDown,
-  ChevronUp,
   AlertTriangle,
+  Tag,
 } from 'lucide-react';
 import { api, getStoredUser } from '../api.ts';
 import { AudioPlayerWidget } from './AudioPlayerWidget.tsx';
-import type { Scammer, PipelineStatus, User, FraudAccount, CanonicalStatus } from '../types.ts';
+import type { Scammer, PipelineStatus, User, CanonicalStatus } from '../types.ts';
 import { toCanonicalStatus } from '../types.ts';
 
 interface EvidenceMediaItem {
@@ -71,18 +67,16 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [dangerLevel, setDangerLevel] = useState(scammer.dangerLevel || 'medium');
   const [targetValue, setTargetValue] = useState<number>(scammer.targetValue || 0);
   const [priority, setPriority] = useState<number>(scammer.priority || 1);
-  const [carrier, setCarrier] = useState(scammer.carrier || '');
   const [location, setLocation] = useState(scammer.location || '');
   const [scamType, setScamType] = useState(scammer.scamType || 'Tech / Refund');
   const [organization, setOrganization] = useState(scammer.organization || '');
-  const [remoteAccessId, setRemoteAccessId] = useState(scammer.remoteAccessId || '');
   const [ipAddress, setIpAddress] = useState(scammer.ipAddress || '');
   const [notes, setNotes] = useState(scammer.notes || '');
 
-  // Active Dossier Notebook Tab (Odoo-style Horizontal Tabs)
-  const [activeTab, setActiveTab] = useState<'notes' | 'assets' | 'evidence' | 'telecom'>('notes');
+  // Active Dossier Notebook Tab (Default Operations Notes)
+  const [activeTab, setActiveTab] = useState<'notes' | 'receiver_info'>('notes');
 
-  // Phone Numbers (up to 4) & WhatsApp
+  // Phone Numbers (Primary, Secondary, Third) & WhatsApp
   const initialPhones =
     Array.isArray(scammer.phoneNumbers) && scammer.phoneNumbers.length > 0
       ? scammer.phoneNumbers
@@ -101,11 +95,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [editHoursVal, setEditHoursVal] = useState<string>('0');
   const [editMinsVal, setEditMinsVal] = useState<string>('0');
 
-  // Top Banner (Organization & Scam Type) Quick-Edit State (click, edit, click out to save)
+  // Top Banner (Organization & Scam Type) Quick-Edit State (P1: Save ONLY when check mark is clicked)
   const [isEditingTopBanner, setIsEditingTopBanner] = useState(false);
   const [editBannerOrg, setEditBannerOrg] = useState(scammer.organization || '');
   const [editBannerScamType, setEditBannerScamType] = useState(scammer.scamType || 'Tech / Refund');
-  const topBannerRef = useRef<HTMLDivElement>(null);
 
   // Sync state when scammer changes
   useEffect(() => {
@@ -116,11 +109,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     setDangerLevel(scammer.dangerLevel || 'medium');
     setTargetValue(scammer.targetValue || 0);
     setPriority(scammer.priority || 1);
-    setCarrier(scammer.carrier || '');
     setLocation(scammer.location || '');
     setScamType(scammer.scamType || 'Tech / Refund');
     setOrganization(scammer.organization || '');
-    setRemoteAccessId(scammer.remoteAccessId || '');
     setIpAddress(scammer.ipAddress || '');
     setNotes(scammer.notes || '');
 
@@ -135,19 +126,8 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     setWhatsappNumber(scammer.whatsappNumber || '');
     setEditBannerOrg(scammer.organization || '');
     setEditBannerScamType(scammer.scamType || 'Tech / Refund');
+    setActiveTab('notes'); // P3: Ensure Operations notes is default active tab
   }, [scammer]);
-
-  // Click-outside listener to save top banner changes immediately
-  useEffect(() => {
-    if (!isEditingTopBanner) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (topBannerRef.current && !topBannerRef.current.contains(e.target as Node)) {
-        handleCommitTopBanner();
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isEditingTopBanner, editBannerOrg, editBannerScamType]);
 
   const handleStartEditingTopBanner = () => {
     setEditBannerOrg(organization || '');
@@ -155,8 +135,8 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     setIsEditingTopBanner(true);
   };
 
+  // P1: Save top banner edits ONLY when orange check mark button is clicked
   const handleCommitTopBanner = () => {
-    if (!isEditingTopBanner) return;
     setIsEditingTopBanner(false);
     const newOrg = editBannerOrg.trim();
     const newScamType = editBannerScamType.trim() || 'Tech / Refund';
@@ -166,6 +146,12 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       organization: newOrg,
       scamType: newScamType,
     });
+  };
+
+  const handleCancelTopBanner = () => {
+    setEditBannerOrg(organization || '');
+    setEditBannerScamType(scamType || 'Tech / Refund');
+    setIsEditingTopBanner(false);
   };
 
   const handleStartEditingTime = () => {
@@ -193,14 +179,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
   const [loggerNotes, setLoggerNotes] = useState('');
   const [loggerPersona, setLoggerPersona] = useState('');
 
-  // Receiver Accounts / Reported Assets form
+  // Receiver Info form state (P4)
   const [showAddFraud, setShowAddFraud] = useState(false);
   const [fraudType, setFraudType] = useState('bank_account');
-  const [fraudDetails, setFraudDetails] = useState('');
-  const [fraudInstitution, setFraudInstitution] = useState('');
-  const [fraudHolder, setFraudHolder] = useState('');
+  const [fraudDetails, setFraudDetails] = useState(''); // Name
+  const [fraudInstitution, setFraudInstitution] = useState(''); // Phone Number / Email
+  const [fraudHolder, setFraudHolder] = useState(''); // Address
 
-  // Evidence & Media State
+  // Evidence & Media State (P5: Moved under Effortless Communication)
   const [evidenceMedia, setEvidenceMedia] = useState<EvidenceMediaItem[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [editingMediaId, setEditingMediaId] = useState<string | null>(null);
@@ -248,11 +234,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         dangerLevel,
         targetValue,
         priority,
-        carrier,
         location,
         scamType,
         organization,
-        remoteAccessId,
         ipAddress,
         notes,
         ...fieldOverrides,
@@ -345,17 +329,24 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     }
   };
 
-  // Add Receiver Account / Asset
-  const handleAddFraudAccount = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // P4: Add Receiver Info with explicit Mule or Victim tag button
+  const handleAddReceiverInfo = async (tagType?: 'mule' | 'victim') => {
     if (!fraudDetails.trim()) return;
+
+    // Append tag to holderName/Address for persistent display
+    let formattedHolder = fraudHolder.trim();
+    if (tagType === 'mule') {
+      formattedHolder = formattedHolder ? `${formattedHolder} [TAG: MULE]` : '[TAG: MULE]';
+    } else if (tagType === 'victim') {
+      formattedHolder = formattedHolder ? `${formattedHolder} [TAG: VICTIM]` : '[TAG: VICTIM]';
+    }
 
     try {
       const res = await api.addFraudAccount(scammer.id, {
         accountType: fraudType,
         accountDetails: fraudDetails.trim(),
         institution: fraudInstitution.trim() || undefined,
-        holderName: fraudHolder.trim() || undefined,
+        holderName: formattedHolder || undefined,
         reportedToBank: false,
       });
 
@@ -370,11 +361,11 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       setFraudInstitution('');
       setFraudHolder('');
     } catch (err) {
-      console.error('[ScammerDetailModal] Add fraud account error:', err);
+      console.error('[ScammerDetailModal] Add receiver info error:', err);
     }
   };
 
-  // Delete Fraud Account
+  // Delete Fraud Account / Receiver Info
   const handleDeleteFraudAccount = async (accId: string) => {
     try {
       await api.deleteFraudAccount(scammer.id, accId);
@@ -384,11 +375,11 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         fraudAccounts: updated,
       });
     } catch (err) {
-      console.error('[ScammerDetailModal] Delete fraud account error:', err);
+      console.error('[ScammerDetailModal] Delete receiver info error:', err);
     }
   };
 
-  // Process Evidence & Media File (Image & Audio with 3MB Limit, 90s Audio Limit, Admin cookiescambait@gmail.com Exempt)
+  // Process Evidence & Media File
   const processMediaFile = async (file: File) => {
     const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac)$/i.test(file.name);
     const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(file.name);
@@ -407,7 +398,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       return;
     }
 
-    // Call audio recordings limit: 90 seconds (1.5 minutes) unless cookiescambait@gmail.com
     if (isAudio && !isExempt) {
       try {
         const durationSeconds = await getAudioDuration(file);
@@ -501,7 +491,20 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     return type.replace(/_/g, ' ');
   };
 
-  // Dynamic Call Log Stats Calculation
+  // Helper to parse Mule/Victim tag from item
+  const getReceiverTag = (holderName?: string | null, accountDetails?: string | null) => {
+    const combined = `${holderName || ''} ${accountDetails || ''}`.toUpperCase();
+    if (combined.includes('MULE')) return 'MULE';
+    if (combined.includes('VICTIM')) return 'VICTIM';
+    return null;
+  };
+
+  const cleanHolderName = (holderName?: string | null) => {
+    if (!holderName) return '';
+    return holderName.replace(/\[TAG:\s*(MULE|VICTIM)\]/gi, '').trim();
+  };
+
+  // Dynamic Call Log Stats Calculation & P6: Scammer Cost ($0.17 per minute)
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
@@ -516,7 +519,8 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
     : scammer.totalTimeSpent || 0;
 
   const totalCallsCount = scammer.calls ? scammer.calls.length : 0;
-  const amountWastedDollars = Math.round((totalMinutes / 60) * 850);
+  // P6: Make Scammer Cost .17 cents a minute of total wasted minutes
+  const scammerCostDollars = Math.round(totalMinutes * 0.17);
 
   const formatDurationDisplay = (mins: number) => {
     if (!mins || mins <= 0) return '0m';
@@ -536,17 +540,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   const currentCanonical = toCanonicalStatus(status);
 
-  // Render Top Banner (Editable Organization & Scam Type - Matching Reference Image)
+  // Render Top Banner (P1: Save ONLY when orange check mark button is clicked)
   const renderTopBanner = () => {
     const displayOrg = organization?.trim() || '';
     const displayScamType = scamType?.trim() || 'Tech / Refund';
 
     if (isEditingTopBanner) {
       return (
-        <div
-          ref={topBannerRef}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border-2 border-amber-500 bg-slate-950 shadow-lg text-amber-400 text-xs sm:text-sm font-extrabold animate-fadeIn"
-        >
+        <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border-2 border-amber-500 bg-slate-950 shadow-lg text-amber-400 text-xs sm:text-sm font-extrabold animate-fadeIn">
           <Building className="w-4 h-4 text-amber-400 shrink-0" />
           <span className="text-amber-400 font-extrabold text-sm">&quot;</span>
           <input
@@ -555,23 +556,19 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             onChange={(e) => setEditBannerOrg(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleCommitTopBanner();
-              if (e.key === 'Escape') setIsEditingTopBanner(false);
+              if (e.key === 'Escape') handleCancelTopBanner();
             }}
             placeholder="Fake Org / Company"
             autoFocus
             className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs sm:text-sm text-amber-300 font-extrabold focus:outline-none focus:border-amber-400 w-32 sm:w-40 font-sans"
-            title="Fake Organization name (press Enter or click out to save)"
+            title="Fake Organization name"
           />
           <span className="text-amber-400 font-extrabold text-sm">-</span>
           <select
             value={editBannerScamType}
             onChange={(e) => setEditBannerScamType(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleCommitTopBanner();
-              if (e.key === 'Escape') setIsEditingTopBanner(false);
-            }}
             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs sm:text-sm text-amber-300 font-extrabold focus:outline-none focus:border-amber-400 cursor-pointer"
-            title="Scam Type (press Enter or click out to save)"
+            title="Scam Type"
           >
             <option value="Tech / Refund">Tech / Refund</option>
             <option value="Crypto Investment">Crypto Investment</option>
@@ -585,9 +582,17 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             type="button"
             onClick={handleCommitTopBanner}
             className="p-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold ml-1 transition cursor-pointer"
-            title="Save changes (or click outside)"
+            title="Click orange check mark to save changes"
           >
             <Check className="w-4 h-4 stroke-[3]" />
+          </button>
+          <button
+            type="button"
+            onClick={handleCancelTopBanner}
+            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold ml-0.5 transition cursor-pointer"
+            title="Cancel editing"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
       );
@@ -598,7 +603,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         type="button"
         onClick={handleStartEditingTopBanner}
         className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-amber-600/70 bg-amber-950/30 hover:bg-amber-950/60 hover:border-amber-400 text-amber-400 transition cursor-pointer shadow-sm group"
-        title="Click to edit Organization and Scam Type (Click out to save)"
+        title="Click to edit Organization and Scam Type (Click orange check mark to save)"
       >
         <Building className="w-4 h-4 text-amber-400 shrink-0" />
         <span className="text-xs sm:text-sm font-extrabold tracking-tight text-amber-400 group-hover:text-amber-300">
@@ -611,9 +616,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-sm text-slate-100 flex flex-col p-2 sm:p-4 gap-3 overflow-hidden antialiased font-sans">
-      {/* ODOO TOP CONTROL BAR: Breadcrumb Navigation + Center Editable Banner + Actions */}
+      {/* ODOO TOP CONTROL BAR */}
       <header className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
-        {/* Left Actions & Identity (Prioritizing alias over fullName when set) */}
+        {/* Left Actions & Identity */}
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -663,7 +668,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             ))}
           </div>
 
-          {/* Primary Target Name Header (Prioritizing Alias over Full Name) */}
+          {/* Target Header Name Display (Prioritizing Alias over Full Name) */}
           <div className="flex items-center gap-2">
             <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
               <div className="flex items-center gap-1.5">
@@ -714,14 +719,13 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Center Top Banner: Editable Fake Organization & Scam Type Pill */}
+        {/* Center Top Banner */}
         <div className="flex items-center justify-center my-1 sm:my-0">
           {renderTopBanner()}
         </div>
 
-        {/* Right Actions (Time counter, Share, Delete, Close) */}
+        {/* Right Actions */}
         <div className="flex items-center gap-2">
-          {/* Quick Edit Total Time Badge */}
           {isEditingTotalTime ? (
             <div className="flex items-center gap-1 bg-slate-900 border-2 border-amber-500 rounded-lg px-2.5 py-1.5 shadow-lg animate-fadeIn text-xs sm:text-sm font-mono font-bold text-white">
               <Clock className="w-4 h-4 text-amber-400 shrink-0" />
@@ -805,7 +809,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
         </div>
       </header>
 
-      {/* ODOO HORIZONTAL STATUS PROGRESSION CHEVRON RIBBON */}
+      {/* ODOO STAGE RIBBON */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2 overflow-x-auto shadow-sm">
         <div className="flex items-center gap-2 flex-1 min-w-max">
           <span className="text-xs font-extrabold text-slate-300 uppercase tracking-wider mr-2 hidden md:inline">
@@ -833,7 +837,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
           })}
         </div>
 
-        {/* Secondary View of Banner on Large Screens */}
         <div className="hidden xl:flex items-center">
           {renderTopBanner()}
         </div>
@@ -841,9 +844,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
       {/* MAIN WORKSPACE: HORIZONTAL 2-PANE ODOO LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 overflow-hidden min-h-0">
-        {/* LEFT PANE (Col Span 7): The Dossier Sheet with Horizontal Property Grid & Notebook Tabs */}
+        {/* LEFT PANE (Col Span 7): Target Profile & Notebook Tabs */}
         <div className="lg:col-span-7 flex flex-col gap-3 overflow-y-auto pr-1">
-          {/* Section 1: Horizontal 2-Column Key Intelligence Field Matrix */}
+          {/* Section 1: Target Profile & Intelligence (P2: Restructured Phone Fields) */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3.5 shadow">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div className="flex items-center gap-2">
@@ -858,7 +861,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs sm:text-sm">
-              {/* Column 1: Telecom & Contact Intel */}
+              {/* Column 1: Phone Numbers & Communication Channels */}
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
@@ -886,9 +889,39 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
+                      Secondary Phone
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. +1 (800) 555-0102"
+                      value={phoneList[1]}
+                      onChange={(e) => handlePhoneChange(1, e.target.value)}
+                      onBlur={() => handleSaveScammerInfo()}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
+                      Third Phone
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. +1 (800) 555-0103"
+                      value={phoneList[2]}
+                      onChange={(e) => handlePhoneChange(2, e.target.value)}
+                      onBlur={() => handleSaveScammerInfo()}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
                     <label className="block text-xs font-bold text-slate-300 uppercase mb-1 flex items-center gap-1">
                       <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
-                      WhatsApp
+                      WhatsApp Number
                     </label>
                     <input
                       type="text"
@@ -902,22 +935,6 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
                   <div>
                     <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
-                      Carrier / VoIP
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. TextNow, Bandwidth"
-                      value={carrier}
-                      onChange={(e) => setCarrier(e.target.value)}
-                      onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold focus:outline-none focus:border-slate-600"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Location / Region
                     </label>
                     <input
@@ -929,24 +946,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold focus:outline-none focus:border-slate-600"
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
-                      Remote Access ID
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="AnyDesk or UltraViewer"
-                      value={remoteAccessId}
-                      onChange={(e) => setRemoteAccessId(e.target.value)}
-                      onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
-                    />
-                  </div>
                 </div>
               </div>
 
-              {/* Column 2: Scam Classification & Financial Metrics */}
+              {/* Column 2: Classification, Scammer Cost & IP */}
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -1007,23 +1010,15 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     />
                   </div>
 
+                  {/* P6: Scammer Cost ($0.17/min) */}
                   <div>
                     <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
-                      Loss Prevented ($)
+                      Scammer Cost ($)
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="100"
-                      placeholder="0"
-                      value={targetValue}
-                      onChange={(e) => {
-                        const val = Number(e.target.value) || 0;
-                        setTargetValue(val);
-                        handleSaveScammerInfo({ targetValue: val });
-                      }}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-emerald-400 font-mono font-extrabold focus:outline-none focus:border-emerald-500"
-                    />
+                    <div className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-emerald-400 font-mono font-extrabold flex items-center justify-between">
+                      <span>${scammerCostDollars.toLocaleString()}</span>
+                      <span className="text-[10px] text-slate-400 font-normal">@ $0.17/m</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1044,7 +1039,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Odoo Horizontal Notebook Tabs (Notes, Receiver Assets, Evidence, Telecom) */}
+          {/* Section 2: Notebook Tabs (P2 & P3: Default Operations Notes, P4: Receiver Info) */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col flex-1 shadow overflow-hidden">
             {/* Tab Strip */}
             <div className="flex items-center gap-1 bg-slate-950 px-3 pt-2.5 border-b border-slate-800 overflow-x-auto">
@@ -1063,45 +1058,19 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('assets')}
+                onClick={() => setActiveTab('receiver_info')}
                 className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-t-lg transition flex items-center gap-1.5 border-t border-x cursor-pointer ${
-                  activeTab === 'assets'
+                  activeTab === 'receiver_info'
                     ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
                     : 'text-slate-400 border-transparent hover:text-slate-200'
                 }`}
               >
                 <DollarSign className="w-4 h-4 text-rose-400" />
-                <span>Receiver Assets ({scammer.fraudAccounts.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('evidence')}
-                className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-t-lg transition flex items-center gap-1.5 border-t border-x cursor-pointer ${
-                  activeTab === 'evidence'
-                    ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
-                    : 'text-slate-400 border-transparent hover:text-slate-200'
-                }`}
-              >
-                <ImageIcon className="w-4 h-4 text-sky-400" />
-                <span>Evidence Vault ({evidenceMedia.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('telecom')}
-                className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-t-lg transition flex items-center gap-1.5 border-t border-x cursor-pointer ${
-                  activeTab === 'telecom'
-                    ? 'bg-slate-900 text-white border-slate-800 border-b-transparent'
-                    : 'text-slate-400 border-transparent hover:text-slate-200'
-                }`}
-              >
-                <Phone className="w-4 h-4 text-emerald-400" />
-                <span>All Phone Numbers</span>
+                <span>Receiver Info ({scammer.fraudAccounts.length})</span>
               </button>
             </div>
 
-            {/* Tab 1: Operations Notes */}
+            {/* Tab 1: Operations Notes (Default P3) */}
             {activeTab === 'notes' && (
               <div className="p-4 flex flex-col flex-1 space-y-2">
                 <div className="flex items-center justify-between text-slate-300 text-xs sm:text-sm font-bold">
@@ -1109,22 +1078,22 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   <span className="text-xs text-slate-400 font-mono">Autosaved on blur</span>
                 </div>
                 <textarea
-                  rows={6}
+                  rows={8}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   onBlur={() => handleSaveScammerInfo()}
                   placeholder="Behavioral traits, accents, background call-center sounds, fake details and credit cards fed during bait sessions..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs sm:text-sm font-semibold text-slate-100 flex-1 min-h-[140px] leading-relaxed focus:outline-none focus:border-slate-700"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs sm:text-sm font-semibold text-slate-100 flex-1 min-h-[160px] leading-relaxed focus:outline-none focus:border-slate-700"
                 />
               </div>
             )}
 
-            {/* Tab 2: Receiver Assets */}
-            {activeTab === 'assets' && (
+            {/* Tab 2: Receiver Info (P4) */}
+            {activeTab === 'receiver_info' && (
               <div className="p-4 space-y-3 flex-1 flex flex-col">
                 <div className="flex items-center justify-between">
                   <span className="text-xs sm:text-sm text-slate-200 font-extrabold">
-                    Reported Accounts, Crypto Wallets &amp; Money Mules
+                    Reported Accounts, Mules &amp; Receiver Information
                   </span>
                   <button
                     type="button"
@@ -1132,18 +1101,21 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer shadow"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>{showAddFraud ? 'Cancel' : 'Add Asset'}</span>
+                    <span>{showAddFraud ? 'Cancel' : 'Add Receiver Info'}</span>
                   </button>
                 </div>
 
                 {showAddFraud && (
                   <form
-                    onSubmit={handleAddFraudAccount}
-                    className="bg-slate-950 border border-rose-500/40 rounded-xl p-3.5 space-y-2.5 text-xs sm:text-sm animate-fadeIn"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleAddReceiverInfo();
+                    }}
+                    className="bg-slate-950 border border-rose-500/40 rounded-xl p-3.5 space-y-3 text-xs sm:text-sm animate-fadeIn"
                   >
                     <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Asset Type</label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Receiver Type</label>
                         <select
                           value={fraudType}
                           onChange={(e) => setFraudType(e.target.value)}
@@ -1160,26 +1132,24 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">
-                          Details (Account / Address / ID)
-                        </label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Name</label>
                         <input
                           type="text"
                           required
-                          placeholder="e.g. Chase 12345678 or bc1q..."
+                          placeholder="e.g. John Doe / Account Name"
                           value={fraudDetails}
                           onChange={(e) => setFraudDetails(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Bank / Institution</label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Phone Number / Email</label>
                         <input
                           type="text"
-                          placeholder="e.g. JPMorgan Chase"
+                          placeholder="e.g. +1 555-0199 or email@domain.com"
                           value={fraudInstitution}
                           onChange={(e) => setFraudInstitution(e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold"
@@ -1187,10 +1157,10 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Account Holder Name</label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Address</label>
                         <input
                           type="text"
-                          placeholder="e.g. Money Mule"
+                          placeholder="e.g. 123 Main St, New York, NY"
                           value={fraudHolder}
                           onChange={(e) => setFraudHolder(e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-semibold"
@@ -1198,275 +1168,117 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-1">
+                    {/* P4: Red Mule Button & Green Victim Button */}
+                    <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
                       <button
                         type="button"
                         onClick={() => setShowAddFraud(false)}
-                        className="px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white"
+                        className="px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white mr-auto"
                       >
                         Cancel
                       </button>
+
                       <button
-                        type="submit"
-                        className="px-3.5 py-1.5 text-xs sm:text-sm font-bold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition"
+                        type="button"
+                        onClick={() => handleAddReceiverInfo('mule')}
+                        className="px-3.5 py-1.5 text-xs sm:text-sm font-bold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition shadow flex items-center gap-1 cursor-pointer"
                       >
-                        Save Asset
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>Save as Mule</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddReceiverInfo('victim')}
+                        className="px-3.5 py-1.5 text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow flex items-center gap-1 cursor-pointer"
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>Save as Victim</span>
                       </button>
                     </div>
                   </form>
                 )}
 
-                <div className="space-y-2.5 overflow-y-auto max-h-[220px]">
+                <div className="space-y-2.5 overflow-y-auto max-h-[260px]">
                   {scammer.fraudAccounts.length === 0 ? (
                     <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs sm:text-sm p-4">
-                      No receiver assets logged yet. Click &quot;Add Asset&quot; to register illicit accounts.
+                      No receiver info logged yet. Click &quot;Add Receiver Info&quot; to log illicit accounts or victim details.
                     </div>
                   ) : (
-                    scammer.fraudAccounts.map((acc) => (
-                      <div
-                        key={acc.id}
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-center justify-between gap-3 hover:border-slate-700 transition"
-                      >
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-extrabold uppercase px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                              {formatAccountTypeLabel(acc.accountType)}
-                            </span>
-                            {acc.institution && (
-                              <span className="text-xs sm:text-sm text-slate-200 font-bold truncate">
-                                {acc.institution}
+                    scammer.fraudAccounts.map((acc) => {
+                      const tag = getReceiverTag(acc.holderName, acc.accountDetails);
+                      const displayAddress = cleanHolderName(acc.holderName);
+
+                      return (
+                        <div
+                          key={acc.id}
+                          className="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-center justify-between gap-3 hover:border-slate-700 transition"
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-extrabold uppercase px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                                {formatAccountTypeLabel(acc.accountType)}
                               </span>
-                            )}
-                            {acc.holderName && (
-                              <span className="text-xs text-slate-400 font-semibold">({acc.holderName})</span>
-                            )}
-                          </div>
-                          <p className="text-xs sm:text-sm font-mono text-slate-100 font-semibold truncate">
-                            {acc.accountDetails}
-                          </p>
-                        </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(acc.accountDetails)}
-                            className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
-                            title="Copy details"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFraudAccount(acc.id)}
-                            className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
+                              {/* P4 Tag Badge */}
+                              {tag === 'MULE' && (
+                                <span className="text-xs font-black uppercase px-2 py-0.5 rounded bg-rose-600 text-white shadow">
+                                  Mule
+                                </span>
+                              )}
+                              {tag === 'VICTIM' && (
+                                <span className="text-xs font-black uppercase px-2 py-0.5 rounded bg-emerald-600 text-white shadow">
+                                  Victim
+                                </span>
+                              )}
 
-            {/* Tab 3: Evidence Vault */}
-            {activeTab === 'evidence' && (
-              <div className="p-4 space-y-3 flex-1 flex flex-col">
-                {/* Drag, Drop & Paste Zone */}
-                <div
-                  onDragOver={handleMediaDragOver}
-                  onDragLeave={handleMediaDragLeave}
-                  onDrop={handleMediaDrop}
-                  onPaste={handleMediaPaste}
-                  tabIndex={0}
-                  className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition focus:outline-none ${
-                    isDraggingMedia
-                      ? 'border-sky-500 bg-sky-500/10'
-                      : 'border-slate-800 bg-slate-950 hover:border-slate-700'
-                  }`}
-                  onClick={() => {
-                    const el = document.getElementById('evidence-media-input');
-                    if (el) el.click();
-                  }}
-                >
-                  <input
-                    type="file"
-                    id="evidence-media-input"
-                    accept="image/*,audio/*"
-                    multiple
-                    onChange={(e) => {
-                      const files = e.target.files;
-                      if (files) {
-                        for (let i = 0; i < files.length; i++) {
-                          processMediaFile(files[i]);
-                        }
-                      }
-                    }}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-1.5 pointer-events-none">
-                    <Upload className="w-5 h-5 text-sky-400" />
-                    <p className="text-xs sm:text-sm font-bold text-slate-200">
-                      Drag &amp; drop images/audio, click to browse, or paste (Ctrl+V)
-                    </p>
-                    <p className="text-xs text-slate-400 font-semibold">
-                      Images (.png, .jpg) &amp; Audio (.mp3, .wav) • Limit 3MB • Audio clips &lt; 90 seconds
-                    </p>
-                  </div>
-                </div>
-
-                {mediaError && (
-                  <div className="p-2.5 rounded-lg bg-rose-950/80 border border-rose-800 text-xs sm:text-sm text-rose-300 font-semibold flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
-                    <span>{mediaError}</span>
-                  </div>
-                )}
-
-                {/* Evidence List */}
-                <div className="space-y-2.5 overflow-y-auto max-h-[220px]">
-                  {evidenceMedia.length === 0 ? (
-                    <div className="text-center py-6 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs sm:text-sm p-4">
-                      No evidence or media files uploaded yet. Drag &amp; drop or paste files above.
-                    </div>
-                  ) : (
-                    evidenceMedia.map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2 hover:border-slate-700 transition"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            {item.type === 'image' ? (
-                              <ImageIcon className="w-4 h-4 text-sky-400 shrink-0" />
-                            ) : (
-                              <FileAudio className="w-4 h-4 text-rose-400 shrink-0" />
-                            )}
-
-                            {editingMediaId === item.id ? (
-                              <div className="flex items-center gap-1 flex-1">
-                                <input
-                                  type="text"
-                                  value={editingMediaName}
-                                  onChange={(e) => setEditingMediaName(e.target.value)}
-                                  className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs sm:text-sm text-white w-full font-semibold"
-                                  autoFocus
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveMediaName(item.id)}
-                                  className="p-1 rounded bg-emerald-600 text-white text-xs font-bold"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ) : (
-                              <span
-                                className="text-xs sm:text-sm font-bold text-slate-100 truncate cursor-pointer hover:text-sky-300"
-                                onClick={() => {
-                                  if (item.type === 'image') setPreviewImage(item.url);
-                                }}
-                              >
-                                {item.name}
+                              <span className="text-xs sm:text-sm text-white font-extrabold truncate">
+                                Name: {acc.accountDetails}
                               </span>
-                            )}
+                            </div>
+
+                            <div className="flex items-center gap-3 text-xs text-slate-300 font-medium flex-wrap">
+                              {acc.institution && (
+                                <span>Phone/Email: <strong className="text-slate-100">{acc.institution}</strong></span>
+                              )}
+                              {displayAddress && (
+                                <span>Address: <strong className="text-slate-100">{displayAddress}</strong></span>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-xs text-slate-400 font-mono font-semibold">
-                              {(item.sizeBytes / 1024).toFixed(0)}KB
-                            </span>
-
-                            {item.type === 'image' && (
-                              <button
-                                type="button"
-                                onClick={() => setPreviewImage(item.url)}
-                                className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white"
-                                title="Preview full size"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            )}
-
+                          <div className="flex items-center gap-1 shrink-0">
                             <button
                               type="button"
-                              onClick={() => {
-                                setEditingMediaId(item.id);
-                                setEditingMediaName(item.name);
-                              }}
-                              className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-amber-300"
-                              title="Rename file"
+                              onClick={() => copyToClipboard(`${acc.accountDetails} ${acc.institution || ''} ${displayAddress}`)}
+                              className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                              title="Copy details"
                             >
-                              <Edit3 className="w-4 h-4" />
+                              <Copy className="w-4 h-4" />
                             </button>
-
                             <button
                               type="button"
-                              onClick={() => handleDeleteMedia(item.id)}
-                              className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
-                              title="Delete file"
+                              onClick={() => handleDeleteFraudAccount(acc.id)}
+                              className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400"
+                              title="Delete"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
-
-                        {item.type === 'image' ? (
-                          <div
-                            className="w-full h-24 bg-slate-900 rounded-lg overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-sky-500/50 transition"
-                            onClick={() => setPreviewImage(item.url)}
-                          >
-                            <img
-                              src={item.url}
-                              alt={item.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="bg-slate-900 rounded-lg p-2 border border-slate-800">
-                            <audio controls src={item.url} className="w-full h-9" />
-                          </div>
-                        )}
-                      </div>
-                    ))
+                      );
+                    })
                   )}
-                </div>
-              </div>
-            )}
-
-            {/* Tab 4: Telecom & All 4 Phone Numbers */}
-            {activeTab === 'telecom' && (
-              <div className="p-4 space-y-3 flex-1 flex flex-col">
-                <span className="text-xs sm:text-sm text-slate-200 font-extrabold">
-                  Telephone Routing &amp; Direct Dials (Up to 4 Numbers)
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {[0, 1, 2, 3].map((idx) => (
-                    <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-                      <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
-                        Phone #{idx + 1} {idx === 0 ? '(Primary Direct)' : ''}
-                      </label>
-                      <input
-                        type="text"
-                        placeholder={`e.g. +1 (800) 555-010${idx + 1}`}
-                        value={phoneList[idx]}
-                        onChange={(e) => handlePhoneChange(idx, e.target.value)}
-                        onBlur={() => handleSaveScammerInfo()}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:border-emerald-500 focus:outline-none"
-                      />
-                    </div>
-                  ))}
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* RIGHT PANE (Col Span 5): ODOO EFFORTLESS COMMUNICATION & CHATTER STREAM */}
-        <div className="lg:col-span-5 flex flex-col gap-3 overflow-hidden">
-          {/* Chatter Container */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col flex-1 shadow overflow-hidden">
+        {/* RIGHT PANE (Col Span 5): Effortless Communication & Evidence Vault (P5) */}
+        <div className="lg:col-span-5 flex flex-col gap-3 overflow-y-auto">
+          {/* Section 1: Chatter Container */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col shadow">
             {/* Chatter Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
               <div className="flex items-center gap-2">
@@ -1488,7 +1300,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               </div>
             </div>
 
-            {/* Horizontal Communication Stats Bar */}
+            {/* Horizontal Communication Stats Bar (P6: Scammer Cost) */}
             <div className="grid grid-cols-4 gap-2 bg-slate-950 border border-slate-800 rounded-lg p-2.5 mb-3 text-center">
               <div>
                 <p className="text-xs text-slate-300 font-extrabold uppercase">Today</p>
@@ -1511,9 +1323,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                 <p className="text-xs sm:text-sm font-black text-sky-400 mt-0.5">{totalCallsCount}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-300 font-extrabold uppercase">Loss Prevented</p>
+                <p className="text-xs text-slate-300 font-extrabold uppercase">Scammer Cost</p>
                 <p className="text-xs sm:text-sm font-black text-rose-400 mt-0.5">
-                  ${amountWastedDollars.toLocaleString()}
+                  ${scammerCostDollars.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -1587,32 +1399,25 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
               </form>
             )}
 
-            {/* Chronological Chatter Stream (Odoo Effortless Communication Style) */}
-            <div className="space-y-2.5 overflow-y-auto flex-1 pr-1">
+            {/* Chronological Chatter Stream */}
+            <div className="space-y-2.5 overflow-y-auto max-h-[220px] pr-1">
               {totalCallsCount === 0 ? (
-                <div className="text-center py-10 bg-slate-950/50 rounded-xl border border-slate-800 text-slate-400 text-xs sm:text-sm p-4 flex flex-col items-center justify-center gap-2">
-                  <Phone className="w-7 h-7 text-slate-600" />
+                <div className="text-center py-6 bg-slate-950/50 rounded-xl border border-slate-800 text-slate-400 text-xs sm:text-sm p-4 flex flex-col items-center justify-center gap-2">
+                  <Phone className="w-6 h-6 text-slate-600" />
                   <p className="font-semibold">No communication records yet.</p>
-                  <p className="text-xs text-slate-500 font-medium">
-                    Use the &quot;Log Call&quot; tray above to track conversations and recordings.
-                  </p>
                 </div>
               ) : (
                 scammer.calls.map((call) => (
                   <div
                     key={call.id}
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5 hover:border-slate-700 transition shadow-sm"
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 hover:border-slate-700 transition shadow-sm"
                   >
-                    {/* Entry Header */}
-                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1.5">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold text-xs">
-                          📞
-                        </div>
-                        <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-extrabold font-mono text-xs sm:text-sm border border-rose-500/30">
-                          {call.durationMinutes}m duration
+                        <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-extrabold font-mono text-xs border border-rose-500/30">
+                          📞 {call.durationMinutes}m duration
                         </span>
-                        <span className="text-xs sm:text-sm text-slate-400 font-medium">
+                        <span className="text-xs text-slate-400 font-medium">
                           {new Date(call.date).toLocaleDateString([], {
                             month: 'short',
                             day: 'numeric',
@@ -1627,31 +1432,197 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                         className="text-slate-500 hover:text-rose-400 p-1 transition"
                         title="Delete record"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
-                    {/* Victim Persona & Notes */}
                     {call.victimPersonaUsed && (
-                      <div className="flex items-center gap-1.5 text-xs sm:text-sm text-amber-400 font-bold">
+                      <div className="flex items-center gap-1.5 text-xs text-amber-400 font-bold">
                         <UserIcon className="w-3.5 h-3.5" />
                         <span>Persona: {call.victimPersonaUsed}</span>
                       </div>
                     )}
 
                     {call.notes && (
-                      <p className="text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 font-medium">
+                      <p className="text-xs text-slate-200 leading-relaxed bg-slate-900/60 p-2 rounded-lg border border-slate-800 font-medium">
                         {call.notes}
                       </p>
                     )}
 
-                    {/* Audio Recording */}
                     {call.audioRecordingUrl && (
                       <div className="pt-1">
                         <AudioPlayerWidget
                           audioUrl={call.audioRecordingUrl}
                           audioName={call.audioRecordingName}
                         />
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Section 2: Evidence Vault (P5: Moved under Effortless Communication) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col gap-3 shadow">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-sky-400" />
+                <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">
+                  Evidence Vault ({evidenceMedia.length})
+                </h3>
+              </div>
+            </div>
+
+            {/* Drag, Drop & Paste Zone */}
+            <div
+              onDragOver={handleMediaDragOver}
+              onDragLeave={handleMediaDragLeave}
+              onDrop={handleMediaDrop}
+              onPaste={handleMediaPaste}
+              tabIndex={0}
+              className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition focus:outline-none ${
+                isDraggingMedia
+                  ? 'border-sky-500 bg-sky-500/10'
+                  : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+              }`}
+              onClick={() => {
+                const el = document.getElementById('evidence-media-input');
+                if (el) el.click();
+              }}
+            >
+              <input
+                type="file"
+                id="evidence-media-input"
+                accept="image/*,audio/*"
+                multiple
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files) {
+                    for (let i = 0; i < files.length; i++) {
+                      processMediaFile(files[i]);
+                    }
+                  }
+                }}
+                className="hidden"
+              />
+              <div className="flex flex-col items-center justify-center gap-1 pointer-events-none">
+                <Upload className="w-4 h-4 text-sky-400" />
+                <p className="text-xs font-bold text-slate-200">
+                  Drag &amp; drop images/audio, click to browse, or paste (Ctrl+V)
+                </p>
+                <p className="text-[11px] text-slate-400 font-semibold">
+                  Images &amp; Audio • Max 3MB • Audio &lt; 90 seconds
+                </p>
+              </div>
+            </div>
+
+            {mediaError && (
+              <div className="p-2 rounded-lg bg-rose-950/80 border border-rose-800 text-xs text-rose-300 font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{mediaError}</span>
+              </div>
+            )}
+
+            {/* Evidence Items */}
+            <div className="space-y-2 overflow-y-auto max-h-[180px]">
+              {evidenceMedia.length === 0 ? (
+                <div className="text-center py-4 bg-slate-950/50 rounded-lg border border-slate-800 text-slate-400 text-xs p-3 font-medium">
+                  No evidence uploaded. Drag &amp; drop files above.
+                </div>
+              ) : (
+                evidenceMedia.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-2 hover:border-slate-700 transition"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {item.type === 'image' ? (
+                          <ImageIcon className="w-4 h-4 text-sky-400 shrink-0" />
+                        ) : (
+                          <FileAudio className="w-4 h-4 text-rose-400 shrink-0" />
+                        )}
+
+                        {editingMediaId === item.id ? (
+                          <div className="flex items-center gap-1 flex-1">
+                            <input
+                              type="text"
+                              value={editingMediaName}
+                              onChange={(e) => setEditingMediaName(e.target.value)}
+                              className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white w-full font-semibold"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveMediaName(item.id)}
+                              className="p-1 rounded bg-emerald-600 text-white text-xs font-bold"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span
+                            className="text-xs font-bold text-slate-100 truncate cursor-pointer hover:text-sky-300"
+                            onClick={() => {
+                              if (item.type === 'image') setPreviewImage(item.url);
+                            }}
+                          >
+                            {item.name}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] text-slate-400 font-mono font-semibold">
+                          {(item.sizeBytes / 1024).toFixed(0)}KB
+                        </span>
+
+                        {item.type === 'image' && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage(item.url)}
+                            className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingMediaId(item.id);
+                            setEditingMediaName(item.name);
+                          }}
+                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-amber-300"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMedia(item.id)}
+                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-rose-400"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {item.type === 'image' ? (
+                      <div
+                        className="w-full h-20 bg-slate-900 rounded-lg overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-sky-500/50 transition"
+                        onClick={() => setPreviewImage(item.url)}
+                      >
+                        <img
+                          src={item.url}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="bg-slate-900 rounded-lg p-1.5 border border-slate-800">
+                        <audio controls src={item.url} className="w-full h-8" />
                       </div>
                     )}
                   </div>

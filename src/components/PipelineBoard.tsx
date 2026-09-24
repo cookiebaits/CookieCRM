@@ -270,8 +270,8 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
       todayMinutes = Math.min(weekMinutes, Math.round(weekMinutes * 0.3));
     }
 
-    // Estimated victim losses prevented: ~$850 per hour of scammer line occupation
-    const estimatedLossPrevented = Math.round((totalMinutes / 60) * 850);
+    // Scammer cost calculated at $0.17 per minute of total wasted minutes
+    const scammerCost = totalMinutes * 0.17;
 
     return {
       totalCount: filteredScammers.length,
@@ -281,7 +281,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
       totalCalls,
       flaggedCount,
       fraudAccountsCount,
-      estimatedLossPrevented,
+      scammerCost,
     };
   }, [filteredScammers]);
 
@@ -453,16 +453,16 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
               </div>
             </div>
 
-            {/* Victims Saved */}
+            {/* Scammer Cost */}
             <div
               className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-300"
-              title="Estimated victim money saved based on scambaiter time diversion"
+              title="Estimated scammer cost based on $0.17 per minute of wasted time"
             >
               <ShieldAlert className="w-4 h-4 text-sky-400 shrink-0" />
               <div className="flex items-baseline gap-1">
-                <span className="text-xs text-sky-300 font-bold">Losses Prevented:</span>
+                <span className="text-xs text-sky-300 font-bold">Scammer Cost:</span>
                 <span className="font-mono text-sm font-bold text-sky-100">
-                  ${scambaitStats.estimatedLossPrevented.toLocaleString()}
+                  ${scambaitStats.scammerCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>

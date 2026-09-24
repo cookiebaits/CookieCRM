@@ -59,9 +59,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onRefres
     fetchAnalytics();
   }, [onRefreshTrigger]);
 
-  const totalMonthlySavings =
-    summary?.estimatedSavingsPrevented ||
-    monthlyData.reduce((sum, m) => sum + (m.estimatedSavings || 0), 0);
+  const totalScammerCost =
+    summary?.scammerCostTotal !== undefined
+      ? summary.scammerCostTotal
+      : (summary?.totalWastedMinutes || 0) * 0.17;
 
   return (
     <div className="space-y-6">
@@ -135,12 +136,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onRefres
           </div>
         </div>
 
-        {/* Card 4: Estimated Losses Prevented */}
+        {/* Card 4: Scammer Cost */}
         <div className="bg-slate-900/90 border border-sky-500/30 rounded-2xl p-4 shadow-lg relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950/20">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
               <ShieldAlert className="w-3.5 h-3.5 text-sky-400" />
-              Losses Prevented
+              Scammer Cost
             </span>
             <div className="p-2 rounded-xl bg-sky-500/20 text-sky-300">
               <ShieldAlert className="w-4 h-4" />
@@ -148,10 +149,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onRefres
           </div>
           <div className="mt-2">
             <div className="text-2xl font-black text-sky-200 font-mono">
-              ${totalMonthlySavings.toLocaleString()}
+              ${totalScammerCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              Estimated victim fraud diversion
+              Calculated at $0.17 / min wasted time
             </p>
           </div>
         </div>
