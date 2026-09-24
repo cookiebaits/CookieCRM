@@ -282,10 +282,10 @@ export default function App() {
     }
   };
 
-  // Scammer update callback (from modal)
+  // Scammer update callback (from modal or quick actions)
   const handleUpdateScammer = (updated: Scammer) => {
     setScammers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    setSelectedScammer(updated);
+    setSelectedScammer((prev) => (prev && prev.id === updated.id ? updated : prev));
     setRefreshTrigger((c) => c + 1);
   };
 

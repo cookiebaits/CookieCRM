@@ -114,6 +114,7 @@ export interface MonthlyDataPoint {
   hours: number;
   callsCount: number;
   estimatedSavings: number;
+  scammerCost?: number;
 }
 
 export interface WeeklyDataPoint {
@@ -159,6 +160,7 @@ export interface AnalyticsSummary {
   flaggedScammersCount: number;
   averageCallDurationMinutes: number;
   estimatedLossPreventedTotal: number;
+  scammerCostTotal?: number;
   scamTypeBreakdown?: ScamTypeStat[];
   topBaitedScammers?: TopBaitedScammer[];
   weeklyBreakdown?: WeeklyDataPoint[];

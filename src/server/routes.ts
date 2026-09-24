@@ -834,8 +834,9 @@ apiRouter.get('/analytics/monthly', requireAuth, async (req: AuthenticatedReques
     const monthlyData = Object.values(monthsMap).map((m) => ({
       ...m,
       hours: Number((m.minutes / 60).toFixed(1)),
-      // Estimated money saved: average scam loss prevented ~$850 per hour of scambaiter waste
-      estimatedSavings: Math.round((m.minutes / 60) * 850),
+      // Scammer Cost: $0.17 per minute of wasted time
+      estimatedSavings: Number((m.minutes * 0.17).toFixed(2)),
+      scammerCost: Number((m.minutes * 0.17).toFixed(2)),
     }));
 
     // Weekly breakdown for the last 4 weeks
@@ -925,7 +926,7 @@ apiRouter.get('/analytics/monthly', requireAuth, async (req: AuthenticatedReques
 
     const averageCallDurationMinutes =
       allCalls.length > 0 ? Math.round(totalWastedMinutes / allCalls.length) : 0;
-    const estimatedLossPreventedTotal = Math.round((totalWastedMinutes / 60) * 850);
+    const scammerCostTotal = Number((totalWastedMinutes * 0.17).toFixed(2));
 
     return res.json({
       monthlyData,
@@ -944,7 +945,8 @@ apiRouter.get('/analytics/monthly', requireAuth, async (req: AuthenticatedReques
         reportedFraudAccounts,
         flaggedScammersCount: allScammers.filter((s) => s.flagged).length,
         averageCallDurationMinutes,
-        estimatedLossPreventedTotal,
+        estimatedLossPreventedTotal: scammerCostTotal,
+        scammerCostTotal,
         scamTypeBreakdown,
         topBaitedScammers,
         weeklyBreakdown,
