@@ -729,7 +729,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[10px] text-slate-400 mb-0.5">Scam Type</label>
+                        <label className="block text-[13px] text-slate-400 mb-0.5">Scam Type</label>
                           <select
                             value={inlineScamType}
                             onChange={(e) => setInlineScamType(e.target.value)}
@@ -744,7 +744,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] text-slate-400 mb-0.5">Initial Time (mins)</label>
+                        <label className="block text-[13px] text-slate-400 mb-0.5">Initial Time (mins)</label>
                           <input
                             type="number"
                             min="0"
@@ -757,7 +757,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-slate-400 mb-0.5">Phone Number</label>
+                      <label className="block text-[13px] text-slate-400 mb-0.5">Phone Number</label>
                         <input
                           type="text"
                           placeholder="e.g. (800) 419-7221"
@@ -768,7 +768,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-slate-400 mb-0.5">Fake Org / Company</label>
+                      <label className="block text-[13px] text-slate-400 mb-0.5">Fake Org / Company</label>
                         <input
                           type="text"
                           placeholder="e.g. Deco Addict, Microsoft Security"
@@ -862,7 +862,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                 <h4 className="font-semibold text-xs text-slate-100 truncate group-hover:text-amber-300 transition flex items-center gap-1">
                                   <span>{scammer.alias ? scammer.alias : scammer.fullName}</span>
                                   {scammer.alias && (
-                                    <span className="text-[11px] text-slate-400 font-normal truncate">
+                                  <span className="text-[14px] text-slate-400 font-normal truncate">
                                       ({scammer.fullName})
                                     </span>
                                   )}
@@ -898,7 +898,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                         className="w-6 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-semibold px-0.5 focus:outline-none"
                                         title="Hours"
                                       />
-                                      <span className="text-[10px] text-slate-400">h</span>
+                                      <span className="text-[13px] text-slate-400">h</span>
                                       <input
                                         type="number"
                                         min="0"
@@ -913,7 +913,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                         className="w-6 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-semibold px-0.5 focus:outline-none"
                                         title="Minutes"
                                       />
-                                      <span className="text-[10px] text-slate-400">m</span>
+                                      <span className="text-[13px] text-slate-400">m</span>
                                     </div>
                                   </div>
                                 ) : (
@@ -984,7 +984,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                 ))}
                               </div>
 
-                              <div className="flex items-center gap-1.5 text-[10px]">
+                              <div className="flex items-center gap-1.5 text-[13px]">
                                 {hasAudio && (
                                   <span className="text-rose-400 flex items-center gap-0.5" title="Audio recording available">
                                     <Volume2 className="w-3 h-3" />
@@ -997,7 +997,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
 
                               <div className="flex items-center gap-1.5">
                                 <div
-                                  className="w-4 h-4 rounded-full bg-slate-800 border border-slate-700 text-[8px] font-semibold text-slate-300 flex items-center justify-center shrink-0"
+                                  className="w-4 h-4 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-semibold text-slate-300 flex items-center justify-center shrink-0"
                                   title={`Agent: ${scammer.user?.name || 'Assigned Agent'}`}
                                 >
                                   {initials}
@@ -1009,7 +1009,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                     onChange={(e) =>
                                       onMovePipeline(scammer.id, e.target.value as PipelineStatus)
                                     }
-                                    className="bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-[9px] text-slate-400 hover:text-white cursor-pointer focus:outline-none"
+                                    className="bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-[12px] text-slate-400 hover:text-white cursor-pointer focus:outline-none"
                                     title="Move stage"
                                   >
                                     <option value="New / Uncalled">New / Uncalled</option>
@@ -1072,13 +1072,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           <div className="font-semibold text-slate-100 hover:text-amber-300 transition flex items-center gap-1.5">
                             <span>{scammer.alias ? scammer.alias : scammer.fullName}</span>
                             {scammer.alias && (
-                              <span className="text-[10px] text-slate-400 font-normal">
+                              <span className="text-[13px] text-slate-400 font-normal">
                                 ({scammer.fullName})
                               </span>
                             )}
                           </div>
                           {scammer.organization && (
-                            <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            <div className="text-[14px] text-slate-400 flex items-center gap-1 mt-0.5">
                               <Building className="w-3 h-3 text-slate-500" />
                               <span>{scammer.organization}</span>
                             </div>
@@ -1088,7 +1088,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                         <td className="px-3.5 py-2.5 font-mono text-slate-300">
                           <div>{scammer.phoneNumber}</div>
                           {scammer.carrier && (
-                            <div className="text-[10px] text-slate-400 truncate max-w-[140px]">
+                            <div className="text-[13px] text-slate-400 truncate max-w-[140px]">
                               {scammer.carrier}
                             </div>
                           )}
@@ -1132,7 +1132,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                   className="w-6 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-semibold px-0.5 focus:outline-none"
                                   title="Hours"
                                 />
-                                <span className="text-[10px] text-slate-400">h</span>
+                                <span className="text-[13px] text-slate-400">h</span>
                                 <input
                                   type="number"
                                   min="0"
@@ -1147,7 +1147,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                   className="w-6 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-semibold px-0.5 focus:outline-none"
                                   title="Minutes"
                                 />
-                                <span className="text-[10px] text-slate-400">m</span>
+                                <span className="text-[13px] text-slate-400">m</span>
                               </div>
                             </div>
                           ) : (

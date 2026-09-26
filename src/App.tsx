@@ -377,7 +377,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
-      {/* Navbar with matching px-6 sm:px-10 lg:px-12 */}
+      {/* Navbar with matching px-8 sm:px-12 lg:px-16 */}
       <Navbar
         user={user}
         activeView={activeView}
@@ -400,7 +400,7 @@ export default function App() {
 
       {/* Activation Status Toast */}
       {activationNotice && (
-        <div className="max-w-[1800px] w-full mx-auto px-6 sm:px-10 lg:px-12 pt-3">
+        <div className="max-w-[1800px] w-full mx-auto px-8 sm:px-12 lg:px-16 pt-3">
           <div
             className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium shadow-lg transition ${
               activationNotice.type === 'success'
@@ -427,8 +427,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Workspace aligned with Navbar (px-6 sm:px-10 lg:px-12) */}
-      <main className="flex-1 max-w-[1800px] w-full mx-auto px-6 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6">
+      {/* Main Workspace aligned with Navbar (px-8 sm:px-12 lg:px-16) */}
+      <main className="flex-1 max-w-[1800px] w-full mx-auto px-8 sm:px-12 lg:px-16 py-4 sm:py-5 lg:py-6">
         {activeView === 'pipeline' ? (
           <div className="space-y-4">
             <div className="md:hidden flex items-center gap-2">
