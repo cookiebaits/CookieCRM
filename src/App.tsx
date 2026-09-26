@@ -96,7 +96,7 @@ export default function App() {
   const [loadingScammers, setLoadingScammers] = useState<boolean>(false);
   const [selectedScammer, setSelectedScammer] = useState<Scammer | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
-  const [quickAddStatus, setQuickAddStatus] = useState<CanonicalStatus>('New');
+  const [quickAddStatus, setQuickAddStatus] = useState<CanonicalStatus>('New / Uncalled');
 
   // Terms & Privacy modal state
   const [showTermsModal, setShowTermsModal] = useState<boolean>(false);
@@ -118,7 +118,7 @@ export default function App() {
     return params.get('share') || null;
   });
 
-  const [targetDetailId, setTargetDetailId] = useState<string | null>(() => {
+  const [targetDetailId] = useState<string | null>(() => {
     const pathname = window.location.pathname;
     if (pathname.startsWith('/target/')) {
       return pathname.replace('/target/', '').trim();
@@ -154,7 +154,6 @@ export default function App() {
     }
 
     if (isActivated && activateToken) {
-      // Returned from GET /api/auth/activate redirect
       window.history.replaceState({}, document.title, window.location.pathname);
       localStorage.setItem('scambaiter_crm_token', activateToken);
       api
@@ -199,7 +198,6 @@ export default function App() {
       return;
     }
 
-    // Standard session verification on mount
     const token = getStoredToken();
     if (!token) {
       setAuthChecking(false);
@@ -220,7 +218,6 @@ export default function App() {
       });
   }, []);
 
-  // Fetch scammers when user is authenticated
   const fetchScammers = async () => {
     if (!user) return;
     try {
@@ -240,7 +237,6 @@ export default function App() {
     }
   }, [user]);
 
-  // Require terms acceptance before proceeding with sensitive "add" actions
   const requireTermsAcceptance = (action: () => void) => {
     if (user && !user.hasAcceptedTerms) {
       setPendingAction(() => action);
@@ -259,9 +255,7 @@ export default function App() {
     }
   };
 
-  // Handle pipeline drag & drop move
   const handleMovePipeline = async (scammerId: string, newStatus: PipelineStatus) => {
-    // Optimistic UI update
     setScammers((prev) =>
       prev.map((s) => (s.id === scammerId ? { ...s, status: newStatus } : s))
     );
@@ -277,19 +271,16 @@ export default function App() {
       setRefreshTrigger((c) => c + 1);
     } catch (err) {
       console.error('Failed to update pipeline status:', err);
-      // Revert if error
       fetchScammers();
     }
   };
 
-  // Scammer update callback (from modal or quick actions)
   const handleUpdateScammer = (updated: Scammer) => {
     setScammers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     setSelectedScammer((prev) => (prev && prev.id === updated.id ? updated : prev));
     setRefreshTrigger((c) => c + 1);
   };
 
-  // Scammer delete callback
   const handleDeleteScammer = (id: string) => {
     setScammers((prev) => prev.filter((s) => s.id !== id));
     if (selectedScammer && selectedScammer.id === id) {
@@ -298,14 +289,12 @@ export default function App() {
     setRefreshTrigger((c) => c + 1);
   };
 
-  // New scammer added callback
   const handleScammerCreated = (newScammer: Scammer) => {
     setScammers((prev) => [newScammer, ...prev]);
     setSelectedScammer(newScammer);
     setRefreshTrigger((c) => c + 1);
   };
 
-  // Logout handler
   const handleLogout = () => {
     clearSession();
     setUser(null);
@@ -313,7 +302,6 @@ export default function App() {
     setSelectedScammer(null);
   };
 
-  // Filtered scammers
   const filteredScammers = useMemo(() => {
     return scammers.filter((s) => {
       if (flaggedOnly && !s.flagged) return false;
@@ -330,7 +318,6 @@ export default function App() {
     });
   }, [scammers, searchQuery, flaggedOnly]);
 
-  // If viewing a public shared link
   if (publicShareId) {
     return (
       <PublicScammerView
@@ -343,7 +330,6 @@ export default function App() {
     );
   }
 
-  // If viewing standalone target page in a dedicated window/tab (/target/:id)
   if (targetDetailId) {
     const foundScammer = scammers.find((s) => s.id === targetDetailId) || selectedScammer;
     if (foundScammer && foundScammer.id === targetDetailId) {
@@ -366,7 +352,6 @@ export default function App() {
         </div>
       );
     }
-    // Fetch scammer if not loaded yet
     return (
       <StandaloneTargetPage
         targetId={targetDetailId}
@@ -377,7 +362,6 @@ export default function App() {
     );
   }
 
-  // If loading auth
   if (authChecking) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
@@ -387,14 +371,13 @@ export default function App() {
     );
   }
 
-  // If not logged in, show Homepage & Auth Landing
   if (!user) {
     return <AuthModal onSuccess={(u) => setUser(u)} />;
   }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
-      {/* Navbar */}
+      {/* Navbar with matching px-6 sm:px-10 lg:px-12 */}
       <Navbar
         user={user}
         activeView={activeView}
@@ -408,7 +391,7 @@ export default function App() {
         onToggleFlagged={() => setFlaggedOnly(!flaggedOnly)}
         onOpenQuickAdd={() =>
           requireTermsAcceptance(() => {
-            setQuickAddStatus('New');
+            setQuickAddStatus('New / Uncalled');
             setIsQuickAddOpen(true);
           })
         }
@@ -417,7 +400,7 @@ export default function App() {
 
       {/* Activation Status Toast */}
       {activationNotice && (
-        <div className="max-w-[1800px] w-full mx-auto px-3 sm:px-5 lg:px-6 pt-3">
+        <div className="max-w-[1800px] w-full mx-auto px-6 sm:px-10 lg:px-12 pt-3">
           <div
             className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium shadow-lg transition ${
               activationNotice.type === 'success'
@@ -444,11 +427,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Workspace */}
-      <main className="flex-1 max-w-[1800px] w-full mx-auto p-3 sm:p-5 lg:p-6">
+      {/* Main Workspace aligned with Navbar (px-6 sm:px-10 lg:px-12) */}
+      <main className="flex-1 max-w-[1800px] w-full mx-auto px-6 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6">
         {activeView === 'pipeline' ? (
           <div className="space-y-4">
-            {/* Header controls for mobile */}
             <div className="md:hidden flex items-center gap-2">
               <input
                 type="text"
@@ -471,7 +453,7 @@ export default function App() {
                 onMovePipeline={handleMovePipeline}
                 onQuickAdd={(status) => {
                   requireTermsAcceptance(() => {
-                    setQuickAddStatus(status || 'New');
+                    setQuickAddStatus(status || 'New / Uncalled');
                     setIsQuickAddOpen(true);
                   });
                 }}

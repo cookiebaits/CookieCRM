@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isAdmin = user.role === 'admin' || user.role === 'admin_scambaiter';
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-6 py-2.5">
+    <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-6 sm:px-10 lg:px-12 py-2.5">
       <div className="max-w-[1800px] w-full mx-auto flex flex-wrap items-center justify-between gap-3 sm:gap-6">
         {/* Left: Brand & Navigation */}
         <div className="flex items-center gap-5">
@@ -52,10 +52,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center hover:opacity-90 transition focus:outline-none cursor-pointer relative z-20 shrink-0"
             title="Scambaiter CRM Intelligence - Return to Dashboard"
           >
+            {/* Logo increased by 10%: h-10 sm:h-11 (approx 40px/44px) */}
             <img
               src="/logo.png"
               alt="Scambaiter CRM Intelligence"
-              className="h-9 sm:h-10 w-auto object-contain max-w-[220px] transition-transform hover:scale-102"
+              className="h-10 sm:h-11 w-auto object-contain max-w-[240px] transition-transform hover:scale-102"
             />
           </button>
 
