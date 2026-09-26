@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+@theme {
+  --text-xs: 15px;
+  --text-xs--line-height: 1.35rem;
+  --text-sm: 17px;
+  --text-sm--line-height: 1.5rem;
+  --text-base: 19px;
+  --text-base--line-height: 1.625rem;
+  --text-lg: 21px;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 23px;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 27px;
+  --text-2xl--line-height: 2.125rem;
+  --text-3xl: 33px;
+  --text-3xl--line-height: 2.375rem;
+}
+
 @layer base {
   :root {
     color-scheme: dark;

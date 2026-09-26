@@ -39,8 +39,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isAdmin = user.role === 'admin' || user.role === 'admin_scambaiter';
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-6 sm:px-10 lg:px-12 py-2.5">
-      <div className="max-w-[1800px] w-full mx-auto flex flex-wrap items-center justify-between gap-3 sm:gap-6">
+    <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80">
+      <div className="max-w-[1800px] w-full mx-auto px-8 sm:px-12 lg:px-16 py-3 flex flex-wrap items-center justify-between gap-3 sm:gap-6">
         {/* Left: Brand & Navigation */}
         <div className="flex items-center gap-5">
           <button
@@ -52,11 +52,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center hover:opacity-90 transition focus:outline-none cursor-pointer relative z-20 shrink-0"
             title="Scambaiter CRM Intelligence - Return to Dashboard"
           >
-            {/* Logo increased by 10%: h-10 sm:h-11 (approx 40px/44px) */}
+            {/* Logo increased by another 10%: h-11 sm:h-12 (approx 44px/48px) */}
             <img
               src="/logo.png"
               alt="Scambaiter CRM Intelligence"
-              className="h-10 sm:h-11 w-auto object-contain max-w-[240px] transition-transform hover:scale-102"
+              className="h-11 sm:h-12 w-auto object-contain max-w-[260px] transition-transform hover:scale-102"
             />
           </button>
 
@@ -173,7 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" title="Administrator" />
                 )}
               </div>
-              <div className="text-[11px] font-normal text-slate-400 flex items-center gap-1 truncate max-w-[130px]">
+              <div className="text-[14px] font-normal text-slate-400 flex items-center gap-1 truncate max-w-[130px]">
                 {isAdmin ? (
                   <span className="text-amber-400/90 font-medium">Admin</span>
                 ) : isGmail ? (
