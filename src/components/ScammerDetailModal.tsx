@@ -29,6 +29,7 @@ import { api, getStoredUser } from '../api.ts';
 import { AudioPlayerWidget } from './AudioPlayerWidget.tsx';
 import type { Scammer, PipelineStatus, User, CanonicalStatus } from '../types.ts';
 import { toCanonicalStatus } from '../types.ts';
+import { formatPhoneNumber, getCleanPhoneForCopy } from '../utils/phone.ts';
 
 interface EvidenceMediaItem {
   id: string;
@@ -83,12 +84,14 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       : [scammer.phoneNumber];
 
   const [phoneList, setPhoneList] = useState<string[]>(() => {
-    const list = [...initialPhones];
+    const list = initialPhones.map((p) => formatPhoneNumber(p || ''));
     while (list.length < 4) list.push('');
     return list.slice(0, 4);
   });
 
-  const [whatsappNumber, setWhatsappNumber] = useState(scammer.whatsappNumber || '');
+  const [whatsappNumber, setWhatsappNumber] = useState(
+    formatPhoneNumber(scammer.whatsappNumber || '')
+  );
 
   // Quick edit total time state (click, edit, click out to save)
   const [isEditingTotalTime, setIsEditingTotalTime] = useState(false);
@@ -119,11 +122,11 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
       Array.isArray(scammer.phoneNumbers) && scammer.phoneNumbers.length > 0
         ? scammer.phoneNumbers
         : [scammer.phoneNumber];
-    const list = [...activeP];
+    const list = activeP.map((p) => formatPhoneNumber(p || ''));
     while (list.length < 4) list.push('');
     setPhoneList(list.slice(0, 4));
 
-    setWhatsappNumber(scammer.whatsappNumber || '');
+    setWhatsappNumber(formatPhoneNumber(scammer.whatsappNumber || ''));
     setEditBannerOrg(scammer.organization || '');
     setEditBannerScamType(scammer.scamType || 'Tech / Refund');
     setActiveTab('notes'); // P3: Ensure Operations notes is default active tab
@@ -250,7 +253,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
 
   const handlePhoneChange = (index: number, val: string) => {
     const updated = [...phoneList];
-    updated[index] = val;
+    updated[index] = formatPhoneNumber(val);
     setPhoneList(updated);
   };
 
@@ -668,53 +671,34 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
             ))}
           </div>
 
-          {/* Target Header Name Display (Prioritizing Alias over Full Name) */}
-          <div className="flex items-center gap-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-extrabold text-slate-400 uppercase">Target:</span>
-                <input
-                  type="text"
-                  value={alias ? alias : fullName}
-                  onChange={(e) => {
-                    if (alias) {
-                      setAlias(e.target.value);
-                    } else {
-                      setFullName(e.target.value);
-                    }
-                  }}
-                  onBlur={() => handleSaveScammerInfo()}
-                  placeholder="Target Alias / Name"
-                  className="text-lg sm:text-xl font-extrabold text-amber-300 bg-transparent border-b border-transparent hover:border-amber-500/50 focus:border-amber-400 focus:outline-none tracking-tight max-w-[200px] sm:max-w-[280px]"
-                  title="Primary Target Display Name (Prioritizing Alias)"
-                />
-              </div>
+          {/* Target Header Name Display (Fixed positions, no swapping) */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Target:</span>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                onBlur={() => handleSaveScammerInfo()}
+                placeholder="Full Name / Real Name"
+                className="text-lg sm:text-xl font-extrabold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-amber-400 focus:outline-none tracking-tight max-w-[180px] sm:max-w-[240px]"
+                title="Target Real Name / Full Name"
+              />
+            </div>
 
-              {alias ? (
-                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Real Name:</span>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    onBlur={() => handleSaveScammerInfo()}
-                    placeholder="Full Name"
-                    className="text-xs sm:text-sm font-semibold text-slate-200 bg-transparent border-b border-slate-700 focus:border-rose-500 focus:outline-none w-28 sm:w-36"
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">+ Alias:</span>
-                  <input
-                    type="text"
-                    value={alias}
-                    onChange={(e) => setAlias(e.target.value)}
-                    onBlur={() => handleSaveScammerInfo()}
-                    placeholder="e.g. Willy Fin"
-                    className="text-xs sm:text-sm font-semibold text-amber-300 bg-transparent border-b border-slate-700 focus:border-amber-400 focus:outline-none w-24 sm:w-32 font-mono"
-                  />
-                </div>
-              )}
+            <div className="h-5 w-px bg-slate-800 hidden sm:block" />
+
+            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+              <span className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">Alias:</span>
+              <input
+                type="text"
+                value={alias}
+                onChange={(e) => setAlias(e.target.value)}
+                onBlur={() => handleSaveScammerInfo()}
+                placeholder="e.g. Hefty Dumb glass"
+                className="text-xs sm:text-sm font-bold text-amber-300 bg-transparent border-b border-slate-700 focus:border-amber-400 focus:outline-none w-28 sm:w-40 font-mono"
+                title="Target Alias (Displayed on Dashboard if present)"
+              />
             </div>
           </div>
         </div>
@@ -870,7 +854,7 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                   <div className="flex items-center gap-1.5">
                     <input
                       type="text"
-                      placeholder="e.g. +1 (800) 555-0100"
+                      placeholder="e.g. (800) 555-0100"
                       value={phoneList[0]}
                       onChange={(e) => handlePhoneChange(0, e.target.value)}
                       onBlur={() => handleSaveScammerInfo()}
@@ -878,9 +862,9 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     />
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(phoneList[0])}
-                      className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
-                      title="Copy phone"
+                      onClick={() => copyToClipboard(getCleanPhoneForCopy(phoneList[0]))}
+                      className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                      title="Copy primary phone (digits only)"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
@@ -892,28 +876,48 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                     <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Secondary Phone
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. +1 (800) 555-0102"
-                      value={phoneList[1]}
-                      onChange={(e) => handlePhoneChange(1, e.target.value)}
-                      onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="e.g. (800) 555-0102"
+                        value={phoneList[1]}
+                        onChange={(e) => handlePhoneChange(1, e.target.value)}
+                        onBlur={() => handleSaveScammerInfo()}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(getCleanPhoneForCopy(phoneList[1]))}
+                        className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                        title="Copy secondary phone (digits only)"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
                       Third Phone
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. +1 (800) 555-0103"
-                      value={phoneList[2]}
-                      onChange={(e) => handlePhoneChange(2, e.target.value)}
-                      onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="e.g. (800) 555-0103"
+                        value={phoneList[2]}
+                        onChange={(e) => handlePhoneChange(2, e.target.value)}
+                        onBlur={() => handleSaveScammerInfo()}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white font-mono font-semibold focus:outline-none focus:border-slate-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(getCleanPhoneForCopy(phoneList[2]))}
+                        className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                        title="Copy third phone (digits only)"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -923,14 +927,24 @@ export const ScammerDetailModal: React.FC<ScammerDetailModalProps> = ({
                       <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
                       WhatsApp Number
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. +1 800 555 9988"
-                      value={whatsappNumber}
-                      onChange={(e) => setWhatsappNumber(e.target.value)}
-                      onBlur={() => handleSaveScammerInfo()}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-emerald-300 font-mono font-semibold focus:outline-none focus:border-emerald-500"
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="e.g. (800) 555-9988"
+                        value={whatsappNumber}
+                        onChange={(e) => setWhatsappNumber(formatPhoneNumber(e.target.value))}
+                        onBlur={() => handleSaveScammerInfo()}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-emerald-300 font-mono font-semibold focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(getCleanPhoneForCopy(whatsappNumber))}
+                        className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                        title="Copy WhatsApp number (digits only)"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div>
