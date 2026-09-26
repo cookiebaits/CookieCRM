@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Phone, User, Tag, AlertCircle, DollarSign, Building, Star } from 'lucide-react';
 import { api } from '../api.ts';
 import type { Scammer, CanonicalStatus } from '../types.ts';
+import { formatPhoneNumber } from '../utils/phone.ts';
 
 interface QuickAddScammerModalProps {
   isOpen: boolean;
@@ -135,9 +136,9 @@ export const QuickAddScammerModal: React.FC<QuickAddScammerModalProps> = ({
                 type="text"
                 id="input-scammer-phone"
                 required
-                placeholder="e.g. +1 (888) 529-8834"
+                placeholder="e.g. (888) 529-8834"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(e) => setPhoneNumber(formatPhoneNumber(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
               />
             </div>

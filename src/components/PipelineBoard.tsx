@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import {
   Phone,
   Clock,
-  Radio,
   ShieldAlert,
   Volume2,
   Plus,
@@ -11,19 +10,13 @@ import {
   Search,
   Kanban,
   List,
-  Star,
   Building,
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
   X,
-  Tag,
-  Check,
-  MoreHorizontal,
   Flame,
   Zap,
-  ShieldCheck,
-  Timer,
   Flag,
 } from 'lucide-react';
 import type { Scammer, PipelineStatus, CanonicalStatus } from '../types.ts';
@@ -56,37 +49,37 @@ const CANONICAL_COLUMNS: ColumnConfig[] = [
   {
     status: 'New / Uncalled',
     title: 'New / Uncalled',
-    badgeClass: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+    badgeClass: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
     barColor: 'bg-sky-500',
-    borderColor: 'border-sky-500/40',
-    accentColor: '#0284c7',
+    borderColor: 'border-sky-500/30',
+    accentColor: '#38bdf8',
     description: 'Initial leads & unverified inbound calls',
   },
   {
     status: 'Currently Baiting',
     title: 'Currently Baiting',
-    badgeClass: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+    badgeClass: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
     barColor: 'bg-teal-500',
-    borderColor: 'border-teal-500/40',
-    accentColor: '#0d9488',
+    borderColor: 'border-teal-500/30',
+    accentColor: '#2dd4bf',
     description: 'Active bait sessions & honeypot VM engaged',
   },
   {
     status: 'Top Scams',
     title: 'Top Scams',
-    badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    badgeClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
     barColor: 'bg-amber-500',
-    borderColor: 'border-amber-500/40',
-    accentColor: '#f59e0b',
+    borderColor: 'border-amber-500/30',
+    accentColor: '#fbbf24',
     description: 'Wire transfer, check deposit or card bait pending',
   },
   {
     status: 'Reported / Down',
     title: 'Reported / Down',
-    badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    badgeClass: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
     barColor: 'bg-emerald-500',
-    borderColor: 'border-emerald-500/40',
-    accentColor: '#10b981',
+    borderColor: 'border-emerald-500/30',
+    accentColor: '#34d399',
     description: 'Scam neutralized, bank accounts frozen & reported',
   },
 ];
@@ -112,13 +105,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState<string>('all');
-  const [selectedPriorityFilter, setSelectedPriorityFilter] = useState<number | 'all'>('all');
+  const [selectedPriorityFilter] = useState<number | 'all'>('all');
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<CanonicalStatus | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
-  // Quick Inline Time Edit state on the dashboard (no save button needed: click, edit, click out/blur to save)
+  // Quick Inline Time Edit state on the dashboard
   const [editingTimeScammerId, setEditingTimeScammerId] = useState<string | null>(null);
   const [editingTimeHours, setEditingTimeHours] = useState<string>('0');
   const [editingTimeMinutes, setEditingTimeMinutes] = useState<string>('0');
@@ -135,7 +128,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
     setEditingTimeMinutes(String(m));
   };
 
-  // Commit editing time on blur or enter (click out to save)
+  // Commit editing time on blur or enter
   const handleCommitTimeEdit = (scammerId: string) => {
     if (editingTimeScammerId !== scammerId) return;
     const h = Math.max(0, parseInt(editingTimeHours, 10) || 0);
@@ -148,7 +141,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
     setEditingTimeScammerId(null);
   };
 
-  // Odoo Column Folding state (e.g. folding/collapsing a column into a slim vertical strip)
+  // Column Folding state
   const [foldedColumns, setFoldedColumns] = useState<Record<CanonicalStatus, boolean>>({
     'New / Uncalled': false,
     'Currently Baiting': false,
@@ -156,7 +149,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
     'Reported / Down': false,
   });
 
-  // Odoo Inline Quick Add state (opening an inline creation card directly at the top of a column)
+  // Inline Quick Add state
   const [inlineAddingCol, setInlineAddingCol] = useState<CanonicalStatus | null>(null);
   const [inlineTitle, setInlineTitle] = useState('');
   const [inlineScamType, setInlineScamType] = useState('Tech / Refund');
@@ -222,7 +215,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
     return groups;
   }, [filteredScammers]);
 
-  // Dynamic Scambaiting Stats (Time Wasted This Week, Today, Total Burned, Savings)
+  // Dynamic Scambaiting Stats
   const scambaitStats = useMemo(() => {
     const now = new Date();
     const dayOfWeek = now.getDay();
@@ -262,7 +255,6 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
       }
     });
 
-    // Provide robust realistic fallback if totalTimeSpent exists on cases
     if (weekMinutes === 0 && totalMinutes > 0) {
       weekMinutes = Math.min(totalMinutes, Math.round(totalMinutes * 0.45));
     }
@@ -270,7 +262,6 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
       todayMinutes = Math.min(weekMinutes, Math.round(weekMinutes * 0.3));
     }
 
-    // Scammer cost calculated at $0.17 per minute of total wasted minutes
     const scammerCost = totalMinutes * 0.17;
 
     return {
@@ -326,12 +317,11 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
     }
   };
 
-  // Star priority click handler (Quick edit: click star 3 to become 3 star rating, clicking star 1 to become 1 star, clicking same star can toggle off)
+  // Star priority click handler
   const handleTogglePriority = (e: React.MouseEvent, scammer: Scammer, newPriority: number) => {
     e.stopPropagation();
     e.preventDefault();
     const currentPriority = scammer.priority || 0;
-    // If user clicks the exact star rating it already has, toggle off to 0, otherwise set directly to clicked star (e.g. if 2 and clicks 3 -> 3)
     const targetRating = currentPriority === newPriority ? 0 : newPriority;
     if (onUpdateScammer) {
       onUpdateScammer(scammer.id, { priority: targetRating });
@@ -347,7 +337,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
     }
   };
 
-  // Odoo Inline Quick Card Submission
+  // Inline Quick Card Submission
   const handleInlineCardSubmit = async (colStatus: CanonicalStatus) => {
     if (!inlineTitle.trim()) {
       setInlineError('Target / Case title is required');
@@ -375,12 +365,11 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
         onScammerCreated(res.scammer);
       }
 
-      // Reset inline form
       setInlineTitle('');
       setInlinePhone('');
       setInlineOrg('');
-      setInlineScamType('Tech Support');
-      setInlineDuration('30');
+      setInlineScamType('Tech / Refund');
+      setInlineDuration('0');
       setInlinePriority(2);
       setInlineAddingCol(null);
     } catch (err: any) {
@@ -391,35 +380,31 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      {/* ODOO-INSPIRED CRM SUBHEADER & CONTROL BAR */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-xl backdrop-blur-md">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
-          {/* Left Side: Odoo "+ New" button & Scambaiting Stats Pills */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Odoo signature button in deep purple/violet accent */}
+    <div className="space-y-3.5">
+      {/* STREAMLINED CONTROL BAR */}
+      <div className="bg-slate-900 border border-slate-800/90 rounded-xl p-3 shadow-md backdrop-blur-md">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Left Side: New Target + Key Metrics */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               id="odoo-new-opportunity-btn"
               onClick={() => onQuickAdd('New / Uncalled')}
-              className="px-4 py-2 rounded-lg bg-[#714B67] hover:bg-[#5f3d56] text-white font-extrabold text-sm flex items-center gap-1.5 shadow-md shadow-purple-950/30 transition hover:scale-[1.02] active:scale-[0.98] tracking-wide shrink-0"
+              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition shrink-0 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               <span>New Target</span>
             </button>
 
-            {/* Cool Scambaiting Stats Replacing Pipeline & Cost */}
-            {/* Hero Stat: Time Wasted This Week */}
+            {/* Time Wasted This Week */}
             <div
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300"
               title="Total scammer time wasted this current week"
             >
-              <Flame className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-xs text-amber-300 font-bold whitespace-nowrap">
-                  Time Wasted This Week:
-                </span>
-                <span className="font-mono text-sm font-black text-amber-100">
+              <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <div className="flex items-baseline gap-1 text-xs">
+                <span className="text-amber-300 font-medium">This Week:</span>
+                <span className="font-mono font-semibold text-amber-100">
                   {formatDuration(scambaitStats.weekMinutes)}
                 </span>
               </div>
@@ -427,77 +412,63 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
 
             {/* Today's Baiting Time */}
             <div
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
               title="Scammer line time burned today"
             >
-              <Zap className="w-4 h-4 text-emerald-400 shrink-0" />
-              <div className="flex items-baseline gap-1">
-                <span className="text-xs text-emerald-300 font-bold">Today:</span>
-                <span className="font-mono text-sm font-bold text-emerald-100">
+              <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <div className="flex items-baseline gap-1 text-xs">
+                <span className="text-emerald-300 font-medium">Today:</span>
+                <span className="font-mono font-semibold text-emerald-100">
                   {formatDuration(scambaitStats.todayMinutes)}
-                </span>
-              </div>
-            </div>
-
-            {/* All-Time Burned */}
-            <div
-              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300"
-              title="Cumulative scambaiting time burned across all operations"
-            >
-              <Clock className="w-4 h-4 text-rose-400 shrink-0" />
-              <div className="flex items-baseline gap-1">
-                <span className="text-xs text-rose-300 font-bold">Total:</span>
-                <span className="font-mono text-sm font-bold text-rose-100">
-                  {formatDuration(scambaitStats.totalMinutes)}
                 </span>
               </div>
             </div>
 
             {/* Scammer Cost */}
             <div
-              className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-300"
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-300"
               title="Estimated scammer cost based on $0.17 per minute of wasted time"
             >
-              <ShieldAlert className="w-4 h-4 text-sky-400 shrink-0" />
-              <div className="flex items-baseline gap-1">
-                <span className="text-xs text-sky-300 font-bold">Scammer Cost:</span>
-                <span className="font-mono text-sm font-bold text-sky-100">
+              <ShieldAlert className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <div className="flex items-baseline gap-1 text-xs">
+                <span className="text-sky-300 font-medium">Scammer Cost:</span>
+                <span className="font-mono font-semibold text-sky-100">
                   ${scambaitStats.scammerCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
 
             {/* Targets count */}
-            <div className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 text-xs font-bold">
-              <span className="text-white font-extrabold">{scambaitStats.totalCount}</span> targets
+            <div className="px-2.5 py-1.5 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-300 text-xs font-medium">
+              <span className="text-white font-semibold">{scambaitStats.totalCount}</span> targets
             </div>
 
-            {/* Search targets, contacts, phone */}
-            <div className="relative min-w-[200px] sm:min-w-[240px]">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            {/* Search input */}
+            <div className="relative min-w-[180px] sm:min-w-[210px]">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 id="odoo-search-input"
-                placeholder="Search targets, phone, org..."
+                placeholder="Filter targets, phone, org..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs font-semibold text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#714B67]"
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-950/60 border border-slate-800 rounded-lg text-xs font-medium text-slate-100 placeholder-slate-400 focus:outline-none focus:border-rose-500/60 transition"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-white bg-slate-800 px-1.5 py-0.5 rounded"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-white bg-slate-800 px-1 py-0.5 rounded"
                 >
                   ✕
                 </button>
               )}
             </div>
 
-            {/* Odoo Quick Filter Pills */}
-            <div className="hidden lg:flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+            {/* Filter Pills */}
+            <div className="hidden lg:flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-xs">
               {[
-                { id: 'all', label: 'All Targets' },
+                { id: 'all', label: 'All' },
                 { id: 'Tech / Refund', label: 'Tech / Refund' },
                 { id: 'flagged', label: 'Flagged' },
                 { id: 'audio', label: 'Audio Proof' },
@@ -506,10 +477,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                   key={chip.id}
                   type="button"
                   onClick={() => setSelectedTagFilter(chip.id)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                  className={`px-2 py-0.5 rounded text-xs font-medium transition ${
                     selectedTagFilter === chip.id
-                      ? 'bg-[#714B67] text-white font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                      ? 'bg-rose-600/80 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {chip.label}
@@ -518,41 +489,38 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
             </div>
           </div>
 
-          {/* Right Side: Export, Import, View Switcher */}
-          <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2.5">
-            {/* Export CSV Button */}
+          {/* Right Side: Export, Import, View Mode Switcher */}
+          <div className="flex items-center justify-between lg:justify-end gap-2">
             <button
               type="button"
               id="export-csv-btn"
               onClick={handleExportCSV}
-              className="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-950/80 hover:bg-slate-800/80 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition"
               title="Export targets to CSV"
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
-              <span>Export CSV</span>
+              <span>Export</span>
             </button>
 
-            {/* Import CSV Button */}
             <button
               type="button"
               id="import-csv-btn"
               onClick={() => setIsImportModalOpen(true)}
-              className="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-950/80 hover:bg-slate-800/80 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition"
               title="Import targets from CSV"
             >
               <Upload className="w-3.5 h-3.5 text-slate-400" />
-              <span>Import CSV</span>
+              <span>Import</span>
             </button>
 
-            {/* Odoo View Mode Switcher (Kanban vs List) */}
-            <div className="flex items-center bg-slate-950 rounded-lg border border-slate-800 p-0.5">
+            <div className="flex items-center bg-slate-950/80 rounded-lg border border-slate-800 p-0.5">
               <button
                 type="button"
                 id="view-kanban-btn"
                 onClick={() => setViewMode('kanban')}
                 className={`p-1.5 rounded transition ${
                   viewMode === 'kanban'
-                    ? 'bg-[#714B67] text-white shadow-sm'
+                    ? 'bg-rose-600/80 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
                 title="Kanban Board View"
@@ -565,7 +533,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded transition ${
                   viewMode === 'list'
-                    ? 'bg-[#714B67] text-white shadow-sm'
+                    ? 'bg-rose-600/80 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
                 title="List View"
@@ -594,11 +562,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
         </div>
       )}
 
-      {/* VIEW 1: KANBAN BOARD - ALL 4 STATUS TILES ALWAYS IN A SINGLE ROW (ODOO CRM STYLE) */}
+      {/* KANBAN BOARD */}
       {viewMode === 'kanban' && (
         <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
-          {/* A single row of 4 columns side-by-side, min-w-[1100px] ensures they never wrap into 2 rows */}
-          <div className="grid grid-cols-4 gap-4 min-w-[1100px] items-start">
+          <div className="grid grid-cols-4 gap-3.5 min-w-[1050px] items-start">
             {CANONICAL_COLUMNS.map((col) => {
               const colScammers = groupedByStatus[col.status] || [];
               const colTotalMinutes = colScammers.reduce((sum, s) => sum + (s.totalTimeSpent || 0), 0);
@@ -606,34 +573,32 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
               const isFolded = foldedColumns[col.status];
               const isInlineAdding = inlineAddingCol === col.status;
 
-              // Odoo progress breakdown (green = low risk, yellow = medium, red = flagged/high risk)
               const highCount = colScammers.filter((s) => s.dangerLevel === 'critical' || s.flagged).length;
               const medCount = colScammers.filter((s) => s.dangerLevel === 'high' || s.dangerLevel === 'medium').length;
               const normalCount = Math.max(0, colScammers.length - highCount - medCount);
 
-              // If folded, render Odoo's collapsed vertical column strip
               if (isFolded) {
                 return (
                   <div
                     key={col.status}
                     onClick={() => toggleFoldColumn(col.status)}
-                    className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-xl p-3 flex flex-col items-center justify-between min-h-[560px] cursor-pointer transition hover:bg-slate-850 group select-none shadow-md"
+                    className="bg-slate-900/80 border border-slate-800 hover:border-slate-700 rounded-xl p-3 flex flex-col items-center justify-between min-h-[560px] cursor-pointer transition hover:bg-slate-850 group select-none shadow-md"
                     title={`Click to unfold ${col.title} stage`}
                   >
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-white">
-                        <ChevronRight className="w-4 h-4" />
+                        <ChevronRight className="w-3.5 h-3.5" />
                       </div>
-                      <span className="font-extrabold text-xs text-slate-300 [writing-mode:vertical-lr] rotate-180 tracking-wider">
+                      <span className="font-semibold text-xs text-slate-300 [writing-mode:vertical-lr] rotate-180 tracking-wide">
                         {col.title}
                       </span>
                     </div>
 
                     <div className="flex flex-col items-center gap-2">
-                      <span className="font-mono text-[11px] font-bold text-amber-400 [writing-mode:vertical-lr] rotate-180">
+                      <span className="font-mono text-xs font-semibold text-amber-300 [writing-mode:vertical-lr] rotate-180">
                         {formatDuration(colTotalMinutes)}
                       </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-slate-300">
+                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-slate-300">
                         {colScammers.length}
                       </span>
                     </div>
@@ -647,22 +612,20 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                   onDragOver={(e) => handleDragOver(e, col.status)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, col.status)}
-                  className={`bg-slate-900/80 border rounded-xl p-3 flex flex-col min-h-[580px] transition duration-150 backdrop-blur-sm relative ${
+                  className={`bg-slate-900/70 border rounded-xl p-3 flex flex-col min-h-[560px] transition duration-150 backdrop-blur-sm relative ${
                     isDragTarget
-                      ? 'border-[#714B67] bg-slate-900/95 shadow-xl shadow-purple-950/40 ring-2 ring-[#714B67]/40'
-                      : 'border-slate-800 hover:border-slate-700'
+                      ? 'border-rose-500/60 bg-slate-900/90 shadow-lg ring-1 ring-rose-500/30'
+                      : 'border-slate-800/80 hover:border-slate-700/80'
                   }`}
                 >
-                  {/* Odoo Column Header */}
-                  <div className="pb-2.5 border-b border-slate-800 mb-3 space-y-2">
+                  {/* Column Header */}
+                  <div className="pb-2.5 border-b border-slate-800/80 mb-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      {/* Title + Quick Add + Fold toggle */}
                       <div className="flex items-center gap-1.5">
-                        <span className="text-base font-black text-white tracking-tight">
+                        <span className="text-sm font-bold text-slate-100 tracking-tight">
                           {col.title}
                         </span>
 
-                        {/* Quick inline card add button */}
                         <button
                           type="button"
                           id={`odoo-inline-add-${col.status.toLowerCase()}-btn`}
@@ -682,7 +645,6 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           <Plus className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* Column fold toggle */}
                         <button
                           type="button"
                           onClick={() => toggleFoldColumn(col.status)}
@@ -693,28 +655,27 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                         </button>
                       </div>
 
-                      {/* Scambaiting Time Wasted & Count badge */}
                       <div className="flex items-center gap-1.5">
                         <span
-                          className="font-mono text-xs font-bold text-amber-300 flex items-center gap-1 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/20"
+                          className="font-mono text-xs font-semibold text-amber-300 flex items-center gap-1 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/20"
                           title="Total scammer time wasted in this stage"
                         >
                           <Clock className="w-3 h-3 text-amber-400" />
                           {formatDuration(colTotalMinutes)}
                         </span>
-                        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-slate-400 font-bold">
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded-md bg-slate-950/80 border border-slate-800 text-slate-400 font-semibold">
                           {colScammers.length}
                         </span>
                       </div>
                     </div>
 
-                    {/* Odoo 3-Segmented Progress Bar (Activity / Health status breakdown) */}
+                    {/* Progress Bar */}
                     <div
-                      className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden flex gap-0.5"
-                      title={`${normalCount} Normal, ${medCount} Active/Medium, ${highCount} High Priority/Flagged`}
+                      className="w-full h-1 bg-slate-950 rounded-full overflow-hidden flex gap-0.5"
+                      title={`${normalCount} Normal, ${medCount} Active, ${highCount} Flagged`}
                     >
                       {colScammers.length === 0 ? (
-                        <div className="w-full h-full bg-slate-800 opacity-40" />
+                        <div className="w-full h-full bg-slate-800/40" />
                       ) : (
                         <>
                           <div
@@ -734,10 +695,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                     </div>
                   </div>
 
-                  {/* ODOO INLINE QUICK CARD CREATION FORM (Toggled via '+') */}
+                  {/* Inline Form */}
                   {isInlineAdding && (
-                    <div className="mb-3 bg-slate-950 border-2 border-[#714B67] rounded-lg p-3 shadow-xl animate-fadeIn space-y-2.5 text-xs">
-                      <div className="flex items-center justify-between text-slate-300 font-bold">
+                    <div className="mb-3 bg-slate-950 border border-rose-500/50 rounded-lg p-2.5 shadow-lg animate-fadeIn space-y-2 text-xs">
+                      <div className="flex items-center justify-between text-slate-200 font-semibold">
                         <span>New Target in {col.title}</span>
                         <button
                           type="button"
@@ -749,7 +710,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                       </div>
 
                       {inlineError && (
-                        <div className="text-[11px] text-rose-400 bg-rose-950/50 p-1.5 rounded border border-rose-900">
+                        <div className="text-xs text-rose-400 bg-rose-950/50 p-1.5 rounded border border-rose-900">
                           {inlineError}
                         </div>
                       )}
@@ -762,7 +723,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           placeholder="Target Name / Moniker (e.g. Alex Watson)"
                           value={inlineTitle}
                           onChange={(e) => setInlineTitle(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#714B67]"
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500/60"
                         />
                       </div>
 
@@ -772,7 +733,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           <select
                             value={inlineScamType}
                             onChange={(e) => setInlineScamType(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-amber-300 focus:outline-none focus:border-[#714B67]"
+                            className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-amber-300 focus:outline-none"
                           >
                             <option value="Crypto Investment">Crypto Investment</option>
                             <option value="IRS / Govt">IRS / Govt</option>
@@ -790,7 +751,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             placeholder="0"
                             value={inlineDuration}
                             onChange={(e) => setInlineDuration(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-amber-300 font-mono focus:outline-none focus:border-[#714B67]"
+                            className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-amber-300 font-mono focus:outline-none"
                           />
                         </div>
                       </div>
@@ -799,10 +760,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                         <label className="block text-[10px] text-slate-400 mb-0.5">Phone Number</label>
                         <input
                           type="text"
-                          placeholder="e.g. +1 (800) 419-7221"
+                          placeholder="e.g. (800) 419-7221"
                           value={inlinePhone}
                           onChange={(e) => setInlinePhone(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-[#714B67]"
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none"
                         />
                       </div>
 
@@ -813,19 +774,18 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           placeholder="e.g. Deco Addict, Microsoft Security"
                           value={inlineOrg}
                           onChange={(e) => setInlineOrg(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-[#714B67]"
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white focus:outline-none"
                         />
                       </div>
 
                       <div className="flex items-center justify-between pt-1">
-                        {/* Priority Stars */}
                         <div className="flex items-center gap-0.5">
                           {[1, 2, 3].map((star) => (
                             <button
                               key={star}
                               type="button"
                               onClick={() => setInlinePriority(star)}
-                              className="text-sm px-0.5 hover:scale-125 transition"
+                              className="text-xs px-0.5 hover:scale-110 transition"
                             >
                               <span className={star <= inlinePriority ? 'text-amber-400' : 'text-slate-700'}>
                                 ★
@@ -834,12 +794,11 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           ))}
                         </div>
 
-                        {/* Add & Discard buttons */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => setInlineAddingCol(null)}
-                            className="px-2 py-1 text-[11px] text-slate-400 hover:text-white"
+                            className="px-2 py-0.5 text-xs text-slate-400 hover:text-white"
                           >
                             Discard
                           </button>
@@ -847,7 +806,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             type="button"
                             disabled={inlineSubmitting}
                             onClick={() => handleInlineCardSubmit(col.status)}
-                            className="px-3 py-1 rounded bg-[#714B67] hover:bg-[#5f3d56] text-white font-bold text-[11px] transition shadow"
+                            className="px-2.5 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition"
                           >
                             {inlineSubmitting ? 'Adding...' : 'Add Target'}
                           </button>
@@ -856,10 +815,10 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                     </div>
                   )}
 
-                  {/* CARDS LIST IN COLUMN */}
-                  <div className="space-y-2.5 flex-1">
+                  {/* Cards List */}
+                  <div className="space-y-2 flex-1">
                     {colScammers.length === 0 && !isInlineAdding ? (
-                      <div className="h-40 border-2 border-dashed border-slate-800/80 rounded-xl flex flex-col items-center justify-center text-xs text-slate-500 p-4 text-center select-none bg-slate-950/20">
+                      <div className="h-36 border border-dashed border-slate-800/80 rounded-xl flex flex-col items-center justify-center text-xs text-slate-500 p-4 text-center select-none bg-slate-950/20">
                         <span>No targets in {col.title}</span>
                         <button
                           type="button"
@@ -868,7 +827,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             setInlineTitle('');
                             setInlineDuration('0');
                           }}
-                          className="mt-2 text-[11px] text-[#b47ea6] hover:underline flex items-center gap-1 font-medium"
+                          className="mt-1.5 text-xs text-rose-400 hover:underline flex items-center gap-1 font-medium"
                         >
                           <Plus className="w-3 h-3" />
                           <span>Quick add</span>
@@ -894,37 +853,37 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             onClick={() => {
                               onSelectScammer(scammer);
                             }}
-                            className="bg-slate-950 border border-slate-800/90 hover:border-slate-600 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-xl transition duration-150 relative group select-none space-y-2 border-l-4 hover:translate-y-[-1px]"
+                            className="bg-slate-950/90 border border-slate-800 hover:border-slate-600 rounded-lg p-2.5 cursor-grab active:cursor-grabbing hover:shadow-lg transition duration-150 relative group select-none space-y-1.5 border-l-4"
                             style={{ borderLeftColor: col.accentColor }}
                           >
-                            {/* Top Row: Target Name/Alias & Time Wasted */}
+                            {/* Target Name/Alias & Time Wasted */}
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <h4 className="font-extrabold text-sm text-white truncate group-hover:text-amber-300 transition flex items-center gap-1.5">
+                                <h4 className="font-semibold text-xs text-slate-100 truncate group-hover:text-amber-300 transition flex items-center gap-1">
                                   <span>{scammer.alias ? scammer.alias : scammer.fullName}</span>
                                   {scammer.alias && (
-                                    <span className="text-[11px] text-slate-400 font-medium truncate">
+                                    <span className="text-[11px] text-slate-400 font-normal truncate">
                                       ({scammer.fullName})
                                     </span>
                                   )}
                                 </h4>
                                 {scammer.organization && (
-                                  <p className="text-xs font-semibold text-slate-300 truncate flex items-center gap-1 mt-0.5">
-                                    <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <p className="text-[11px] font-normal text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                    <Building className="w-3 h-3 text-slate-500 shrink-0" />
                                     <span>{scammer.organization}</span>
                                   </p>
                                 )}
                               </div>
 
-                              {/* Time Wasted Display & Quick Edit (Click, edit, click out to save) */}
+                              {/* Time Wasted */}
                               <div className="text-right shrink-0" onClick={(e) => e.stopPropagation()}>
                                 {editingTimeScammerId === scammer.id ? (
                                   <div
-                                    className="flex items-center gap-1 bg-slate-900 border-2 border-amber-500 rounded px-1.5 py-0.5 shadow-lg animate-fadeIn"
+                                    className="flex items-center gap-1 bg-slate-900 border border-amber-500/80 rounded px-1.5 py-0.5 shadow-md animate-fadeIn"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <Clock className="w-3 h-3 text-amber-400 shrink-0" />
-                                    <div className="flex items-center gap-0.5 text-xs font-mono font-bold text-white">
+                                    <div className="flex items-center gap-0.5 text-xs font-mono font-semibold text-white">
                                       <input
                                         type="number"
                                         min="0"
@@ -936,7 +895,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                           if (e.key === 'Escape') setEditingTimeScammerId(null);
                                         }}
                                         autoFocus
-                                        className="w-7 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                                        className="w-6 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-semibold px-0.5 focus:outline-none"
                                         title="Hours"
                                       />
                                       <span className="text-[10px] text-slate-400">h</span>
@@ -951,7 +910,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                           if (e.key === 'Enter') handleCommitTimeEdit(scammer.id);
                                           if (e.key === 'Escape') setEditingTimeScammerId(null);
                                         }}
-                                        className="w-7 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                                        className="w-6 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-semibold px-0.5 focus:outline-none"
                                         title="Minutes"
                                       />
                                       <span className="text-[10px] text-slate-400">m</span>
@@ -961,25 +920,25 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                   <button
                                     type="button"
                                     onClick={(e) => handleStartTimeEdit(e, scammer)}
-                                    className="font-mono text-xs font-extrabold text-amber-300 bg-amber-950/60 hover:bg-amber-900/60 hover:border-amber-400 px-2 py-0.5 rounded border border-amber-500/40 flex items-center gap-1 transition cursor-pointer group/time"
-                                    title="Total time wasted on this scammer. Click to quick edit time."
+                                    className="font-mono text-xs font-semibold text-amber-300 bg-amber-950/40 hover:bg-amber-900/40 px-1.5 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 transition cursor-pointer"
+                                    title="Click to quick edit time."
                                   >
-                                    <Clock className="w-3.5 h-3.5 text-amber-400 group-hover/time:scale-110 transition" />
+                                    <Clock className="w-3 h-3 text-amber-400" />
                                     <span>{formatDuration(scammer.totalTimeSpent || 0)}</span>
                                   </button>
                                 )}
                               </div>
                             </div>
 
-                            {/* Second Row: Phone, Tags & Quick Flag Action */}
+                            {/* Phone & Tags */}
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-xs font-mono font-bold text-slate-200 flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
+                              <span className="text-xs font-mono font-medium text-slate-300 flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
                                 <Phone className="w-3 h-3 text-emerald-400 shrink-0" />
                                 <span>{scammer.phoneNumber}</span>
                               </span>
 
                               {scammer.scamType && (
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-900 text-slate-200 border border-slate-700">
+                                <span className="text-xs font-normal px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800">
                                   {scammer.scamType}
                                 </span>
                               )}
@@ -987,20 +946,19 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                               <button
                                 type="button"
                                 onClick={(e) => handleToggleFlagged(e, scammer)}
-                                title={scammer.flagged ? "Flagged target (Click to unflag)" : "Click to quick flag target"}
-                                className={`p-1 rounded font-bold transition flex items-center justify-center border ${
+                                title={scammer.flagged ? "Flagged target" : "Click to flag target"}
+                                className={`p-1 rounded font-semibold transition flex items-center justify-center border ${
                                   scammer.flagged
-                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 hover:bg-rose-500/30'
-                                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:border-rose-500/30'
+                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
                                 }`}
                               >
                                 <Flag className={`w-3 h-3 ${scammer.flagged ? 'text-rose-400 fill-rose-400' : 'text-slate-500'}`} />
                               </button>
                             </div>
 
-                            {/* Footer Row: 3-Star Priority, Calls & Audio, Avatar */}
-                            <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                              {/* Left: Clickable 3-Star Priority Rating */}
+                            {/* Footer: Priority, Calls & Audio, Avatar */}
+                            <div className="pt-1.5 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
                               <div
                                 className="flex items-center gap-0.5 cursor-pointer"
                                 title={`Priority: ${priorityRating} of 3. Click to adjust.`}
@@ -1011,12 +969,12 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                     key={star}
                                     type="button"
                                     onClick={(e) => handleTogglePriority(e, scammer, star)}
-                                    className="text-xs hover:scale-125 transition px-0.5"
+                                    className="text-xs hover:scale-110 transition px-0.5"
                                   >
                                     <span
                                       className={
                                         star <= priorityRating
-                                          ? 'text-amber-400 font-bold'
+                                          ? 'text-amber-400 font-semibold'
                                           : 'text-slate-700'
                                       }
                                     >
@@ -1026,8 +984,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                 ))}
                               </div>
 
-                              {/* Middle: Calls Count & Audio Indicator */}
-                              <div className="flex items-center gap-2 text-[10px]">
+                              <div className="flex items-center gap-1.5 text-[10px]">
                                 {hasAudio && (
                                   <span className="text-rose-400 flex items-center gap-0.5" title="Audio recording available">
                                     <Volume2 className="w-3 h-3" />
@@ -1038,24 +995,21 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                 </span>
                               </div>
 
-                              {/* Right: User Avatar & Quick-move dropdown */}
                               <div className="flex items-center gap-1.5">
-                                {/* Odoo User Avatar Circle */}
                                 <div
-                                  className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#714B67] to-slate-700 border border-slate-600 text-[9px] font-bold text-white flex items-center justify-center shrink-0 shadow-sm"
-                                  title={`Scambaiter Agent: ${scammer.user?.name || 'Assigned Agent'}`}
+                                  className="w-4 h-4 rounded-full bg-slate-800 border border-slate-700 text-[8px] font-semibold text-slate-300 flex items-center justify-center shrink-0"
+                                  title={`Agent: ${scammer.user?.name || 'Assigned Agent'}`}
                                 >
                                   {initials}
                                 </div>
 
-                                {/* Quick Stage Mover */}
                                 <div onClick={(e) => e.stopPropagation()}>
                                   <select
                                     value={toCanonicalStatus(scammer.status)}
                                     onChange={(e) =>
                                       onMovePipeline(scammer.id, e.target.value as PipelineStatus)
                                     }
-                                    className="bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-[9px] text-slate-300 hover:text-white cursor-pointer focus:outline-none"
+                                    className="bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-[9px] text-slate-400 hover:text-white cursor-pointer focus:outline-none"
                                     title="Move stage"
                                   >
                                     <option value="New / Uncalled">New / Uncalled</option>
@@ -1078,26 +1032,26 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
         </div>
       )}
 
-      {/* VIEW 2: TABLE LIST VIEW (Odoo CRM List Mode) */}
+      {/* TABLE LIST VIEW */}
       {viewMode === 'list' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-md">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider font-semibold">
+              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 text-xs font-semibold">
                 <tr>
-                  <th className="px-4 py-3">Target / Case</th>
-                  <th className="px-4 py-3">Contact & Phone</th>
-                  <th className="px-4 py-3">Stage</th>
-                  <th className="px-4 py-3">Time Wasted</th>
-                  <th className="px-4 py-3">Priority</th>
-                  <th className="px-4 py-3">Scam Type</th>
-                  <th className="px-4 py-3 text-right">Stage Move</th>
+                  <th className="px-3.5 py-2.5">Target / Case</th>
+                  <th className="px-3.5 py-2.5">Contact & Phone</th>
+                  <th className="px-3.5 py-2.5">Stage</th>
+                  <th className="px-3.5 py-2.5">Time Wasted</th>
+                  <th className="px-3.5 py-2.5">Priority</th>
+                  <th className="px-3.5 py-2.5">Scam Type</th>
+                  <th className="px-3.5 py-2.5 text-right">Stage Move</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-200">
                 {filteredScammers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
                       No targets match your filter.
                     </td>
                   </tr>
@@ -1112,13 +1066,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                         onClick={() => {
                           onSelectScammer(scammer);
                         }}
-                        className="hover:bg-slate-800/50 cursor-pointer transition"
+                        className="hover:bg-slate-800/40 cursor-pointer transition"
                       >
-                        <td className="px-4 py-3">
-                          <div className="font-bold text-white hover:text-amber-300 transition flex items-center gap-1.5">
+                        <td className="px-3.5 py-2.5">
+                          <div className="font-semibold text-slate-100 hover:text-amber-300 transition flex items-center gap-1.5">
                             <span>{scammer.alias ? scammer.alias : scammer.fullName}</span>
                             {scammer.alias && (
-                              <span className="text-[10px] text-slate-500 font-normal">
+                              <span className="text-[10px] text-slate-400 font-normal">
                                 ({scammer.fullName})
                               </span>
                             )}
@@ -1131,40 +1085,39 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           )}
                         </td>
 
-                        <td className="px-4 py-3 font-mono text-slate-300">
+                        <td className="px-3.5 py-2.5 font-mono text-slate-300">
                           <div>{scammer.phoneNumber}</div>
                           {scammer.carrier && (
-                            <div className="text-[10px] text-slate-500 truncate max-w-[140px]">
+                            <div className="text-[10px] text-slate-400 truncate max-w-[140px]">
                               {scammer.carrier}
                             </div>
                           )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3.5 py-2.5">
                           <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
+                            className={`px-2 py-0.5 rounded text-xs font-semibold border ${
                               canonical === 'New / Uncalled'
-                                ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                                ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
                                 : canonical === 'Currently Baiting'
-                                ? 'bg-teal-500/20 text-teal-300 border-teal-500/30'
+                                ? 'bg-teal-500/15 text-teal-300 border-teal-500/30'
                                 : canonical === 'Top Scams'
-                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                             }`}
                           >
                             {canonical}
                           </span>
                         </td>
 
-                        {/* Time Wasted Column with Quick Edit */}
-                        <td className="px-4 py-3 font-mono font-bold text-amber-300" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3.5 py-2.5 font-mono font-semibold text-amber-300" onClick={(e) => e.stopPropagation()}>
                           {editingTimeScammerId === scammer.id ? (
                             <div
                               className="flex items-center gap-1 bg-slate-900 border border-amber-500 rounded px-1.5 py-0.5"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Clock className="w-3 h-3 text-amber-400 shrink-0" />
-                              <div className="flex items-center gap-0.5 text-xs font-mono font-bold text-white">
+                              <div className="flex items-center gap-0.5 text-xs font-mono font-semibold text-white">
                                 <input
                                   type="number"
                                   min="0"
@@ -1176,7 +1129,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                     if (e.key === 'Escape') setEditingTimeScammerId(null);
                                   }}
                                   autoFocus
-                                  className="w-7 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                                  className="w-6 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-semibold px-0.5 focus:outline-none"
                                   title="Hours"
                                 />
                                 <span className="text-[10px] text-slate-400">h</span>
@@ -1191,7 +1144,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                     if (e.key === 'Enter') handleCommitTimeEdit(scammer.id);
                                     if (e.key === 'Escape') setEditingTimeScammerId(null);
                                   }}
-                                  className="w-7 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-bold px-0.5 py-0.5 focus:outline-none focus:border-amber-400"
+                                  className="w-6 bg-slate-950 border border-slate-700 rounded text-center text-amber-300 font-semibold px-0.5 focus:outline-none"
                                   title="Minutes"
                                 />
                                 <span className="text-[10px] text-slate-400">m</span>
@@ -1210,7 +1163,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3.5 py-2.5">
                           <div
                             className="flex items-center gap-1.5 cursor-pointer"
                             onClick={(e) => e.stopPropagation()}
@@ -1221,13 +1174,13 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                                   key={star}
                                   type="button"
                                   onClick={(e) => handleTogglePriority(e, scammer, star)}
-                                  className="text-xs hover:scale-125 transition px-0.5"
+                                  className="text-xs hover:scale-110 transition px-0.5"
                                   title={`Set priority to ${star} stars`}
                                 >
                                   <span
                                     className={
                                       star <= priorityRating
-                                        ? 'text-amber-400 font-bold'
+                                        ? 'text-amber-400 font-semibold'
                                         : 'text-slate-700'
                                     }
                                   >
@@ -1239,7 +1192,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                             <button
                               type="button"
                               onClick={(e) => handleToggleFlagged(e, scammer)}
-                              title={scammer.flagged ? "Flagged (Click to unflag)" : "Click to quick flag"}
+                              title={scammer.flagged ? "Flagged" : "Click to flag"}
                               className={`p-1 rounded transition ${
                                 scammer.flagged ? 'text-rose-400 bg-rose-500/20' : 'text-slate-600 hover:text-slate-300'
                               }`}
@@ -1249,11 +1202,11 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({
                           </div>
                         </td>
 
-                        <td className="px-4 py-3 text-slate-300 font-medium">
+                        <td className="px-3.5 py-2.5 text-slate-300 font-normal">
                           {scammer.scamType || 'Tech / Refund'}
                         </td>
 
-                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3.5 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                           <select
                             value={canonical}
                             onChange={(e) =>
